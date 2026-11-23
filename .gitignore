@@ -1,0 +1,16 @@
+# Personal data: transcripts, snapshots and generated reports never go to git.
+data/
+out/
+*.jsonl
+!tests/**/*.jsonl
+
+# Python
+__pycache__/
+*.pyc
+*.egg-info/
+build/
+dist/
+.venv/
+
+# OS
+.DS_Store
