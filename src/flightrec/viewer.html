@@ -1,0 +1,546 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>__TITLE__</title>
+<style>
+:root {
+  color-scheme: light dark;
+  --bg: #faf9f5; --card: #ffffff; --soft: #f1efe8; --line: #e4e2da; --line2: #cfccc2;
+  --fg: #1f1f1d; --mut: #6b6a65; --faint: #9a988f;
+  --acc: #185FA5; --acc-bg: #E6F1FB;
+  --call: #7F77DD; --base: #B4B2A9; --tool: #1D9E75; --err: #E24B4A; --spawn: #D85A30;
+  --used: #3B6D11; --used-bg: #EAF3DE; --unclear: #854F0B; --unclear-bg: #FAEEDA;
+  --none: #5F5E5A; --none-bg: #F1EFE8; --you: #185FA5;
+  --f-startup: #888780; --f-repeat: #D85A30; --f-lineage: #3B6D11; --f-conflict: #E24B4A; --f-approval: #185FA5;
+  --fade: rgba(250, 249, 245, 0.72);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1d1d1b; --card: #262624; --soft: #2e2e2b; --line: #3a3a37; --line2: #4a4a46;
+    --fg: #ecebe6; --mut: #a3a29c; --faint: #7a7973;
+    --acc: #85B7EB; --acc-bg: #0C447C;
+    --call: #AFA9EC; --base: #5F5E5A; --tool: #5DCAA5; --err: #F09595; --spawn: #F0997B;
+    --used: #97C459; --used-bg: #27500A; --unclear: #FAC775; --unclear-bg: #633806;
+    --none: #B4B2A9; --none-bg: #444441; --you: #85B7EB;
+    --f-startup: #B4B2A9; --f-repeat: #F0997B; --f-lineage: #97C459; --f-conflict: #F09595; --f-approval: #85B7EB;
+    --fade: rgba(29, 29, 27, 0.72);
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+main { max-width: 1400px; margin: 0 auto; padding: 20px 16px 40px; }
+h1 { font-size: 20px; font-weight: 500; margin: 0; }
+h2 { font-size: 13px; font-weight: 500; color: var(--mut); margin: 0 0 6px; }
+button, select { font: inherit; color: var(--fg); background: var(--card); border: 1px solid var(--line2); border-radius: 6px; padding: 4px 10px; cursor: pointer; }
+button:hover { background: var(--soft); }
+button:focus-visible, select:focus-visible, input:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--acc); outline-offset: 1px; }
+.sub { color: var(--mut); font-size: 13px; }
+.badge { display: inline-block; font-size: 11px; padding: 1px 7px; border-radius: 6px; white-space: nowrap; }
+.b-used { background: var(--used-bg); color: var(--used); }
+.b-unclear { background: var(--unclear-bg); color: var(--unclear); }
+.b-none { background: var(--none-bg); color: var(--none); }
+.metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin: 14px 0; }
+.metric { background: var(--soft); border-radius: 8px; padding: 8px 12px; }
+.metric .k { font-size: 12px; color: var(--mut); }
+.metric .v { font-size: 20px; font-weight: 500; font-variant-numeric: tabular-nums; }
+.metric .t { font-size: 12px; color: var(--faint); }
+.controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
+.controls input[type=range] { flex: 1; min-width: 160px; }
+#clock { min-width: 190px; text-align: right; font-variant-numeric: tabular-nums; color: var(--mut); font-size: 13px; }
+.lanes { display: flex; border: 1px solid var(--line); border-radius: 8px; background: var(--card); overflow: hidden; }
+#labels { flex: 0 0 250px; border-right: 1px solid var(--line); min-width: 0; }
+.lab { display: flex; flex-direction: column; justify-content: center; padding: 0 10px; cursor: pointer; overflow: hidden; }
+.lab:hover, .lab.sel { background: var(--soft); }
+.lab .n { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 13px; }
+.lab .m { font-size: 11px; color: var(--mut); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#area { flex: 1; overflow-x: auto; overflow-y: hidden; position: relative; min-width: 0; }
+#svg { display: block; cursor: crosshair; }
+.legend { display: flex; gap: 14px; flex-wrap: wrap; color: var(--mut); font-size: 12px; margin: 8px 0 16px; align-items: center; }
+.sw { display: inline-block; width: 12px; height: 9px; border-radius: 2px; vertical-align: -1px; margin-right: 4px; }
+.panels { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 12px; }
+.panel { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; min-width: 0; }
+.feed div, .fl div.item { padding: 5px 0; border-top: 1px solid var(--line); cursor: pointer; font-size: 13px; overflow-wrap: anywhere; }
+.feed div:first-child, .fl div.item:first-child { border-top: none; }
+.feed div:hover, .fl div.item:hover { background: var(--soft); }
+.feed .w, .fl .w { color: var(--mut); font-variant-numeric: tabular-nums; margin-right: 6px; }
+.feed .ag { color: var(--mut); margin-right: 6px; }
+#detail { font-size: 13px; overflow-wrap: anywhere; }
+#detail table { border-collapse: collapse; margin: 4px 0 8px; }
+#detail td { padding: 2px 12px 2px 0; vertical-align: top; }
+#detail td:first-child { color: var(--mut); white-space: nowrap; }
+#detail pre { white-space: pre-wrap; font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--soft); padding: 8px 10px; border-radius: 6px; max-height: 340px; overflow: auto; margin: 4px 0 10px; }
+#detail a { color: var(--acc); }
+.chips { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 6px; }
+.chip { font-size: 12px; padding: 2px 9px; border-radius: 6px; border: 1px solid var(--line2); background: var(--card); cursor: pointer; }
+.chip.on { background: var(--acc-bg); color: var(--acc); border-color: var(--acc); }
+.note { font-size: 12px; color: var(--mut); margin-top: 18px; line-height: 1.6; }
+.dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: 0; }
+kbd { font: 11px ui-monospace, Menlo, monospace; border: 1px solid var(--line2); border-radius: 4px; padding: 0 4px; }
+@media (max-width: 700px) { #labels { flex-basis: 130px; } }
+</style>
+</head>
+<body>
+<main>
+  <div style="display:flex;gap:10px;align-items:baseline;flex-wrap:wrap">
+    <h1 id="title"></h1>
+    <span class="sub" id="meta"></span>
+  </div>
+  <div class="metrics" id="metrics"></div>
+  <div class="controls">
+    <button id="play">Play</button>
+    <button id="prev" aria-label="Previous event" title="Previous event (left arrow)">◀</button>
+    <button id="next" aria-label="Next event" title="Next event (right arrow)">▶</button>
+    <select id="speed" aria-label="Replay speed"></select>
+    <input type="range" id="slider" min="0" step="any" aria-label="Playhead">
+    <span id="clock"></span>
+  </div>
+  <div class="controls">
+    <span class="sub">Zoom</span>
+    <button id="zout" aria-label="Zoom out">−</button>
+    <button id="zfit">Fit</button>
+    <button id="zin" aria-label="Zoom in">+</button>
+    <span class="sub" id="zlabel"></span>
+  </div>
+  <div class="lanes">
+    <div id="labels"></div>
+    <div id="area"><svg id="svg" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Timeline with one lane per agent"></svg></div>
+  </div>
+  <div class="legend" id="legend"></div>
+  <div class="panels">
+    <div class="panel"><h2>At the playhead</h2><div class="feed" id="feed"></div></div>
+    <div class="panel"><h2>Selected</h2><div id="detail"></div></div>
+    <div class="panel"><h2>Findings</h2><div class="chips" id="chips"></div><div class="fl" id="findings"></div></div>
+  </div>
+  <div class="note" id="notes"></div>
+</main>
+<script>
+const DATA = /*__DATA__*/null;
+</script>
+<script>
+"use strict";
+// All transcript text is inserted with textContent / text nodes, never as HTML.
+
+// ---------------------------------------------------------------- helpers
+const $ = (id) => document.getElementById(id);
+const SVGNS = "http://www.w3.org/2000/svg";
+function h(tag, attrs, ...kids) {
+  const e = document.createElement(tag);
+  for (const k in attrs || {}) {
+    if (k === "class") e.className = attrs[k];
+    else if (k.startsWith("on")) e.addEventListener(k.slice(2), attrs[k]);
+    else e.setAttribute(k, attrs[k]);
+  }
+  for (const c of kids) if (c != null) e.append(c instanceof Node ? c : String(c));
+  return e;
+}
+function s(tag, attrs, parent) {
+  const e = document.createElementNS(SVGNS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(e);
+  return e;
+}
+function tip(el, text) { const t = document.createElementNS(SVGNS, "title"); t.textContent = text; el.appendChild(t); return el; }
+const fmtTok = (n) => n >= 1e6 ? (n / 1e6).toFixed(2) + "M" : n >= 1e4 ? Math.round(n / 1e3) + "k" : n >= 1e3 ? (n / 1e3).toFixed(1) + "k" : String(Math.round(n));
+const fmtUsd = (v) => v == null ? "?" : v >= 100 ? "$" + v.toFixed(0) : v >= 1 ? "$" + v.toFixed(2) : "$" + v.toFixed(3);
+function fmtDur(sec) {
+  sec = Math.max(0, Math.round(sec));
+  if (sec < 60) return sec + "s";
+  if (sec < 3600) return Math.floor(sec / 60) + "m " + String(sec % 60).padStart(2, "0") + "s";
+  if (sec < 86400) return Math.floor(sec / 3600) + "h " + String(Math.floor(sec % 3600 / 60)).padStart(2, "0") + "m";
+  return Math.floor(sec / 86400) + "d " + Math.floor(sec % 86400 / 3600) + "h";
+}
+const fmtClock = (t) => t == null ? "?" : new Date(t * 1000).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit" });
+function bisectRight(arr, v, key) { let lo = 0, hi = arr.length; while (lo < hi) { const m = (lo + hi) >> 1; if (key(arr[m]) <= v) lo = m + 1; else hi = m; } return lo; }
+const short = (t, n) => !t ? "" : t.length > n ? t.slice(0, n - 1) + "…" : t;
+const oneLine = (t) => (t || "").replace(/\s+/g, " ").trim();
+
+// ---------------------------------------------------------------- data prep
+const D = DATA;
+const A = D.agents;
+const TOTAL = Math.max(D.display, 1);
+const statusClass = (st) => st === "used" ? "b-used" : st === "unclear" ? "b-unclear" : "b-none";
+const statusColor = (st) => st === "used" ? "var(--used)" : st === "unclear" ? "var(--unclear)" : "var(--none)";
+const kindNames = { startup: "startup cost", repeat: "repeated work", lineage: "subagent work", conflict: "file conflicts", approval: "your approvals" };
+// active time = display time minus the squeezed breaks before it
+const activeAt = (d) => d - D.breaks.filter((b) => b.d + b.len <= d).reduce((t, b) => t + b.len, 0);
+
+// one feed of everything that happens, for stepping and the "at the playhead" panel
+const feed = [];
+D.calls.forEach((c, i) => c.s != null && feed.push({ d: c.s, type: "call", i, a: c.a }));
+D.tools.forEach((t, i) => t.s != null && feed.push({ d: t.s, type: "tool", i, a: t.a }));
+D.said.forEach((m, i) => m.d != null && feed.push({ d: m.d, type: "said", i, a: m.a }));
+A.forEach((a, i) => i > 0 && a.report != null && feed.push({ d: a.report, type: "report", i, a: a.parent ?? 0 }));
+D.humans.forEach((d, i) => d != null && feed.push({ d, type: "human", i, a: 0 }));
+D.compactions.forEach((d, i) => d != null && feed.push({ d, type: "compact", i, a: 0 }));
+feed.sort((p, q) => p.d - q.d);
+const stops = [...new Set(feed.map((f) => f.d))].sort((p, q) => p - q);
+
+// running totals over model calls, for the counters
+const callsByStart = D.calls.filter((c) => c.s != null).sort((p, q) => p.s - q.s);
+const cumCost = [], cumTok = [];
+let accCost = 0, accTok = 0;
+for (const c of callsByStart) { accCost += c.cost || 0; accTok += c.in + c.out; cumCost.push(accCost); cumTok.push(accTok); }
+
+// display time -> real clock time, from moments that carry both
+const anchors = [];
+for (const c of D.calls) if (c.s != null && c.real != null) anchors.push([c.s, c.real]);
+for (const t of D.tools) if (t.s != null && t.real != null) anchors.push([t.s, t.real]);
+for (const m of D.said) if (m.d != null && m.real != null) anchors.push([m.d, m.real]);
+anchors.sort((p, q) => p[0] - q[0]);
+const inBreak = (d) => D.breaks.find((b) => d > b.d && d < b.d + b.len);
+function realAt(d) {
+  if (!anchors.length || inBreak(d)) return null;
+  const [ad, ar] = anchors[Math.max(0, bisectRight(anchors, d, (p) => p[0]) - 1)];
+  return ar + Math.max(0, d - ad);
+}
+const maxIn = Math.max(1, ...D.calls.map((c) => c.in));
+const firstCall = {};
+D.calls.forEach((c, i) => { if (c.s != null && (!(c.a in firstCall) || c.s < D.calls[firstCall[c.a]].s)) firstCall[c.a] = i; });
+const spawnOf = {};
+D.tools.forEach((t) => { if (t.spawned != null && !(t.spawned in spawnOf)) spawnOf[t.spawned] = t; });
+
+// ---------------------------------------------------------------- state
+let play = TOTAL, playing = false, speed = 60, zoom = 1, sel = null, filter = null, lastFeedKey = "";
+const LANE = 46, TOP = 26, PAD = 12;
+let W = 800, X = (d) => d;
+
+// ---------------------------------------------------------------- header
+$("title").textContent = D.title || "Session " + D.session.slice(0, 8);
+$("meta").textContent = [D.session.slice(0, 8), fmtClock(D.started) + " → " + fmtClock(D.ended),
+  D.models.join(", "), D.redacted ? "redacted" : ""].filter(Boolean).join(" · ");
+const M = {};
+function metric(key, label) {
+  const v = h("div", { class: "v" }), t = h("div", { class: "t" });
+  $("metrics").append(h("div", { class: "metric" }, h("div", { class: "k" }, label), v, t));
+  M[key] = { v, t };
+}
+metric("cost", "Cost so far (API-equivalent)");
+metric("tok", "Tokens so far");
+metric("run", "Agents running now");
+metric("time", "Active time so far");
+metric("agents", "Agents");
+
+// ---------------------------------------------------------------- legend
+const leg = $("legend");
+function legItem(color, text, round) { leg.append(h("span", {}, h("span", { class: round ? "dot" : "sw", style: "background:" + color }), text)); }
+legItem("var(--call)", "model call (taller = more context)");
+legItem("var(--base)", "first call of a subagent (base context)");
+legItem("var(--tool)", "tool call");
+legItem("var(--spawn)", "started a subagent");
+legItem("var(--err)", "tool error");
+legItem("var(--you)", "your message", true);
+leg.append(h("span", {}, "▲ finding · arrows show reports coming back, coloured by whether they were used · grey bands are squeezed idle time"));
+leg.append(h("span", {}, h("kbd", {}, "space"), " play  ", h("kbd", {}, "←"), " ", h("kbd", {}, "→"), " step"));
+
+// ---------------------------------------------------------------- lanes
+const svg = $("svg"), area = $("area");
+const yOf = (i) => TOP + i * LANE + LANE / 2;
+function drawLabels() {
+  const box = $("labels");
+  box.replaceChildren(h("div", { style: "height:" + TOP + "px" }));
+  A.forEach((a, i) => {
+    const ln = a.lineage;
+    const m = h("div", { class: "m" }, fmtUsd(a.cost) + " · " + a.calls + " calls" + (a.missing ? " · no transcript" : "") + " ");
+    if (ln) m.append(h("span", { class: "badge " + statusClass(ln.status) }, ln.status));
+    const open = () => select({ type: "agent", i });
+    box.append(h("div", { class: "lab" + (sel && sel.type === "agent" && sel.i === i ? " sel" : ""),
+      style: "height:" + LANE + "px;padding-left:" + (10 + Math.min(a.depth, 4) * 14) + "px", tabindex: "0", title: a.label,
+      onclick: open, onkeydown: (e) => e.key === "Enter" && open() },
+      h("div", { class: "n" }, (a.depth ? "└ " : "") + a.label), m));
+  });
+}
+function draw() {
+  const avail = area.clientWidth || 800;
+  W = Math.max(avail, Math.round(avail * zoom));
+  const H = TOP + A.length * LANE + 8;
+  X = (d) => PAD + (d / TOTAL) * (W - 2 * PAD);
+  svg.setAttribute("width", W); svg.setAttribute("height", H); svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  svg.replaceChildren();
+  const bg = s("g", {}, svg), links = s("g", {}, svg), body = s("g", {}, svg), marks = s("g", {}, svg);
+
+  // squeezed idle time
+  for (const b of D.breaks) {
+    const w = Math.max(3, X(b.d + b.len) - X(b.d));
+    tip(s("rect", { x: X(b.d), y: TOP - 8, width: w, height: H - TOP + 8, fill: "var(--soft)" }, bg), "Idle " + fmtDur(b.real) + " (squeezed)");
+    if (w > 26) s("text", { x: X(b.d + b.len / 2), y: 13, "font-size": 10, fill: "var(--faint)", "text-anchor": "middle" }, bg).textContent = fmtDur(b.real);
+  }
+  // lane lines and lifetimes
+  A.forEach((a, i) => {
+    const y = yOf(i);
+    s("line", { x1: 0, x2: W, y1: y + LANE / 2, y2: y + LANE / 2, stroke: "var(--line)", "stroke-width": 1 }, bg);
+    if (a.start != null) {
+      const end = a.report ?? a.end ?? a.start;
+      s("rect", { x: X(a.start), y: y - 1.5, width: Math.max(2, X(end) - X(a.start)), height: 3, fill: "var(--line2)", rx: 1.5 }, bg);
+    }
+  });
+  // spawn and report lines
+  A.forEach((a, i) => {
+    if (i === 0 || a.parent == null) return;
+    const py = yOf(a.parent), cy = yOf(i);
+    const sd = spawnOf[i] ? spawnOf[i].s : a.start;
+    if (sd != null) s("path", { d: `M${X(sd)} ${py + 11} L${X(sd)} ${cy - 18}`, stroke: "var(--spawn)", "stroke-width": 1, "stroke-dasharray": "3 3", fill: "none" }, links);
+    if (a.report != null) {
+      const st = a.lineage ? a.lineage.status : "no trace found", rx = X(a.report);
+      tip(s("path", { d: `M${rx} ${cy - 6} L${rx} ${py + 12} M${rx - 4} ${py + 18} L${rx} ${py + 12} L${rx + 4} ${py + 18}`,
+        stroke: statusColor(st), "stroke-width": 1.6, fill: "none" }, links), "Report back to parent: " + st);
+    }
+  });
+  // model calls (above the line)
+  D.calls.forEach((c, i) => {
+    if (c.s == null) return;
+    const y = yOf(c.a), hgt = 5 + 13 * Math.sqrt(c.in / maxIn);
+    const isBase = c.a > 0 && firstCall[c.a] === i;
+    tip(s("rect", { x: X(c.s), y: y - 2 - hgt, width: Math.max(2, X(c.e) - X(c.s)), height: hgt, rx: 1,
+      fill: isBase ? "var(--base)" : "var(--call)", opacity: c.copied ? 0.35 : 1, "data-t": "call", "data-i": i, style: "cursor:pointer" }, body),
+      `Model call · ${fmtTok(c.in)} in · ${fmtTok(c.out)} out · ${fmtUsd(c.cost)}${isBase ? " · base context" : ""}${c.copied ? " · copied from an older session" : ""}`);
+  });
+  // tool calls (below the line)
+  D.tools.forEach((t, i) => {
+    if (t.s == null) return;
+    tip(s("rect", { x: X(t.s), y: yOf(t.a) + 3, width: Math.max(2, X(t.e) - X(t.s)), height: 7, rx: 1,
+      fill: t.error ? "var(--err)" : t.spawned != null ? "var(--spawn)" : "var(--tool)", "data-t": "tool", "data-i": i, style: "cursor:pointer" }, body),
+      `${t.name}${t.target ? " · " + short(oneLine(t.target), 200) : ""}${t.error ? " · error" : ""}`);
+  });
+  // your messages and compactions, above the lead lane
+  D.humans.forEach((d) => d != null && tip(s("circle", { cx: X(d), cy: TOP - 1, r: 4, fill: "var(--you)" }, marks), "Your message"));
+  D.compactions.forEach((d) => d != null && tip(s("rect", { x: X(d) - 3, y: TOP - 5, width: 6, height: 8, fill: "var(--faint)" }, marks), "Conversation compacted"));
+  // findings
+  D.findings.forEach((f, i) => {
+    if (f.d == null || (filter && f.kind !== filter)) return;
+    const fx = X(f.d), fy = yOf(f.a) + 19;
+    tip(s("path", { d: `M${fx} ${fy - 6} L${fx + 5} ${fy + 3} L${fx - 5} ${fy + 3} Z`, fill: `var(--f-${f.kind})`, "data-t": "finding", "data-i": i, style: "cursor:pointer" }, marks), f.title);
+  });
+  // selection highlight, and the link from a repeat back to the first time
+  if (sel) {
+    let el = null;
+    if (sel.type === "call" || sel.type === "tool" || sel.type === "finding") el = svg.querySelector(`[data-t="${sel.type}"][data-i="${sel.i}"]`);
+    if (sel.type === "finding") {
+      const f = D.findings[sel.i];
+      if (f.kind === "repeat" && f.tool != null && f.first_tool != null) {
+        const a = D.tools[f.first_tool], b = D.tools[f.tool];
+        s("path", { d: `M${X(a.s)} ${yOf(a.a) + 10} C${X(a.s)} ${yOf(a.a) + 34}, ${X(b.s)} ${yOf(b.a) + 34}, ${X(b.s)} ${yOf(b.a) + 10}`,
+          stroke: "var(--f-repeat)", "stroke-width": 1.5, fill: "none", "stroke-dasharray": "4 3" }, marks);
+      }
+    }
+    if (el) { el.setAttribute("stroke", "var(--fg)"); el.setAttribute("stroke-width", 1.5); }
+  }
+  // fade what hasn't happened yet, and the playhead
+  s("rect", { id: "fade", x: X(play), y: 0, width: Math.max(0, W - X(play)), height: H, fill: "var(--fade)", "pointer-events": "none" }, svg);
+  s("line", { id: "ph", x1: X(play), x2: X(play), y1: 0, y2: H, stroke: "var(--spawn)", "stroke-width": 1.5, "pointer-events": "none" }, svg);
+  $("zlabel").textContent = zoom === 1 ? "whole run" : (zoom < 10 ? zoom.toFixed(1) : Math.round(zoom)) + "×";
+}
+svg.addEventListener("click", (e) => {
+  const t = e.target.closest("[data-t]");
+  if (t) { select({ type: t.dataset.t, i: +t.dataset.i }); return; }
+  const r = svg.getBoundingClientRect();
+  setPlay((e.clientX - r.left - PAD) / (W - 2 * PAD) * TOTAL);
+});
+
+// ---------------------------------------------------------------- playhead
+function setPlay(d, keepScroll) {
+  play = Math.min(TOTAL, Math.max(0, d));
+  $("slider").value = play;
+  const fade = $("fade"), ph = $("ph");
+  if (fade) { fade.setAttribute("x", X(play)); fade.setAttribute("width", Math.max(0, W - X(play))); }
+  if (ph) { ph.setAttribute("x1", X(play)); ph.setAttribute("x2", X(play)); }
+  if (!keepScroll && zoom > 1) {
+    const px = X(play);
+    if (px < area.scrollLeft + 40 || px > area.scrollLeft + area.clientWidth - 40) area.scrollLeft = px - area.clientWidth / 2;
+  }
+  const k = bisectRight(callsByStart, play, (c) => c.s);
+  M.cost.v.textContent = fmtUsd(k ? cumCost[k - 1] : 0);
+  M.cost.t.textContent = "of " + fmtUsd(D.totals.cost) + (D.totals.cost_unknown ? ` (${D.totals.cost_unknown} calls unpriced)` : "");
+  M.tok.v.textContent = fmtTok(k ? cumTok[k - 1] : 0);
+  M.tok.t.textContent = "of " + fmtTok(D.totals.tokens) + " · " + k + " of " + callsByStart.length + " calls";
+  M.run.v.textContent = A.filter((a) => a.start != null && a.start <= play && play < (a.report ?? a.end ?? a.start)).length;
+  M.run.t.textContent = "at most " + D.totals.peak + " subagents at once";
+  M.time.v.textContent = fmtDur(activeAt(play));
+  M.time.t.textContent = "of " + fmtDur(D.active) + " active · " + fmtDur(D.wall) + " wall clock";
+  M.agents.v.textContent = A.length;
+  M.agents.t.textContent = (A.length - 1) + " subagents · " + D.totals.tools + " tool calls";
+  const br = inBreak(play);
+  $("clock").textContent = br ? "idle for " + fmtDur(br.real) : fmtClock(realAt(play));
+  renderFeed();
+}
+function feedText(f) {
+  if (f.type === "call") { const c = D.calls[f.i]; return `model call · ${fmtTok(c.in)} in · ${fmtTok(c.out)} out · ${fmtUsd(c.cost)}`; }
+  if (f.type === "tool") { const t = D.tools[f.i]; return t.spawned != null ? `started ${A[t.spawned].label}` : `${t.name}${t.target ? " · " + short(oneLine(t.target), 110) : ""}${t.error ? " · error" : ""}`; }
+  if (f.type === "said") return "“" + short(oneLine(D.said[f.i].text), 160) + "”";
+  if (f.type === "report") { const a = A[f.i]; return `report from ${a.label} · ${a.lineage ? a.lineage.status : "?"}`; }
+  if (f.type === "human") return "you sent a message";
+  return "conversation compacted";
+}
+function renderFeed() {
+  const k = bisectRight(feed, play, (f) => f.d);
+  if (String(k) === lastFeedKey) return;
+  lastFeedKey = String(k);
+  const box = $("feed");
+  box.replaceChildren();
+  const items = feed.slice(Math.max(0, k - 10), k).reverse();
+  if (!items.length) { box.append(h("div", {}, "Nothing has happened yet. Press Play or click the timeline.")); return; }
+  for (const f of items) {
+    const target = f.type === "call" || f.type === "tool" || f.type === "said" ? { type: f.type, i: f.i } : f.type === "report" ? { type: "agent", i: f.i } : null;
+    box.append(h("div", { onclick: () => target && select(target) }, h("span", { class: "w" }, fmtDur(activeAt(f.d))),
+      h("span", { class: "ag" }, short(A[f.a] ? A[f.a].label : "", 28)), feedText(f)));
+  }
+}
+
+// ---------------------------------------------------------------- details
+const row = (k, v) => h("tr", {}, h("td", {}, k), h("td", {}, v));
+function select(item, keepPlay) {
+  sel = item;
+  const box = $("detail");
+  box.replaceChildren();
+  let at = null;
+  if (item.type === "agent") {
+    const a = A[item.i], ln = a.lineage;
+    box.append(h("div", { style: "font-weight:500" }, a.label));
+    const t = h("table", {}, row("type", a.kind + (a.background ? " · background" : "")), row("model", a.model || "?"),
+      row("cost", fmtUsd(a.cost) + " API-equivalent"),
+      row("tokens", `fresh in ${fmtTok(a.tokens.in)} · cache write ${fmtTok(a.tokens.cache_write)} · cache read ${fmtTok(a.tokens.cache_read)} · out ${fmtTok(a.tokens.out)}`),
+      row("work", a.calls + " model calls · " + a.tools + " tool calls"));
+    if (a.base_context != null && item.i > 0) t.append(row("base context", fmtTok(a.base_context) + " tokens at its first call · " + Math.round(a.base_share * 100) + "% of its cost"));
+    if (ln) {
+      const v = h("span", {}, h("span", { class: "badge " + statusClass(ln.status) }, ln.status), " ");
+      if (ln.report !== "no report") v.append(`Report ${ln.report}: ${ln.reused} of ${ln.items} distinctive items reappeared, ${Math.round(ln.overlap * 100)}% of phrases. `);
+      if (ln.files_written) v.append(`Files: ${ln.files_written} written, ${ln.picked_up} picked up, ${ln.revised} revised, ${ln.replaced} replaced.`);
+      t.append(row("where its work went", v));
+    }
+    if (a.missing) t.append(row("note", "Its transcript file is missing; only what the parent saw is shown."));
+    box.append(t);
+    const end = a.report ?? a.end;
+    if (a.start != null && end != null && end > a.start) box.append(h("button", { style: "margin-bottom:8px", onclick: () => zoomTo(a.start, end) }, "Zoom to its time"));
+    if (a.instructions) box.append(h("h2", {}, "Instructions it got"), h("pre", {}, a.instructions));
+    if (a.report_text) box.append(h("h2", {}, "Its report"), h("pre", {}, a.report_text));
+    at = item.i === 0 ? null : (a.report ?? a.end ?? a.start);  // show its whole lane as already happened
+  } else if (item.type === "call") {
+    const c = D.calls[item.i];
+    box.append(h("div", { style: "font-weight:500" }, "Model call · " + A[c.a].label),
+      h("table", {}, row("when", fmtClock(c.real)), row("model", D.models[c.m]),
+        row("context in", `${fmtTok(c.in)} (fresh ${fmtTok(c.fresh)} · cache write ${fmtTok(c.cw)} · cache read ${fmtTok(c.cr)})`),
+        row("written", fmtTok(c.out) + " tokens"), row("cost", fmtUsd(c.cost) + " API-equivalent"),
+        c.copied ? row("note", "Copied history: the original of this call lives in an older session file.") : null));
+    at = c.s;
+  } else if (item.type === "tool") {
+    const t = D.tools[item.i];
+    const tb = h("table", {}, row("when", fmtClock(t.real)), row("took", fmtDur(t.e - t.s)),
+      row("result", (t.media ? "image or document" : t.chars.toLocaleString() + " characters") + (t.error ? " · error" : "")));
+    if (t.approval) tb.append(row("permission", (t.approval.by_you ? "decided by you: " : "decided by settings: ") + t.approval.decision));
+    if (t.spawned != null) tb.append(row("started", h("a", { href: "#", onclick: (e) => { e.preventDefault(); select({ type: "agent", i: t.spawned }); } }, A[t.spawned].label)));
+    box.append(h("div", { style: "font-weight:500" }, t.name + " · " + A[t.a].label), tb);
+    if (t.target) box.append(h("h2", {}, "Target"), h("pre", {}, t.target));
+    at = t.s;
+  } else if (item.type === "said") {
+    const m = D.said[item.i];
+    box.append(h("div", { style: "font-weight:500" }, A[m.a].label + " wrote"), h("div", { class: "sub" }, fmtClock(m.real)), h("pre", {}, m.text));
+    at = m.d;
+  } else if (item.type === "finding") {
+    const f = D.findings[item.i];
+    box.append(h("div", { style: "font-weight:500" }, f.title), h("div", { class: "sub" }, kindNames[f.kind] + " · " + A[f.a].label),
+      h("p", { style: "margin:6px 0" }, f.detail));
+    at = f.d;
+  }
+  drawLabels();
+  draw();
+  lastFeedKey = "";
+  if (!keepPlay && at != null) setPlay(at); else setPlay(play, true);
+}
+
+// ---------------------------------------------------------------- findings list
+function renderFindings() {
+  const counts = {};
+  D.findings.forEach((f) => counts[f.kind] = (counts[f.kind] || 0) + 1);
+  const pick = (k) => { filter = k; renderFindings(); draw(); setPlay(play, true); };
+  const chips = $("chips");
+  chips.replaceChildren(h("span", { class: "chip" + (filter ? "" : " on"), onclick: () => pick(null) }, "all " + D.findings.length));
+  for (const k of Object.keys(kindNames)) if (counts[k]) chips.append(h("span", { class: "chip" + (filter === k ? " on" : ""), onclick: () => pick(k) },
+    h("span", { class: "dot", style: `background:var(--f-${k})` }), kindNames[k] + " " + counts[k]));
+  const box = $("findings");
+  box.replaceChildren();
+  const list = D.findings.map((f, i) => [f, i]).filter(([f]) => !filter || f.kind === filter);
+  if (!list.length) box.append(h("div", { class: "sub" }, "No findings for this run."));
+  for (const [f, i] of list) {
+    box.append(h("div", { class: "item", onclick: () => select({ type: "finding", i }) },
+      h("span", { class: "dot", style: `background:var(--f-${f.kind})` }), h("span", { class: "w" }, f.d == null ? "?" : fmtDur(activeAt(f.d))),
+      f.title + " · ", h("span", { class: "sub" }, short(A[f.a].label, 40))));
+  }
+}
+
+// ---------------------------------------------------------------- replay controls
+const speeds = [10, 30, 60, 150, 300, 900];
+speed = speeds.reduce((best, v) => Math.abs(TOTAL / v - 60) < Math.abs(TOTAL / best - 60) ? v : best, speeds[0]);
+for (const v of speeds) $("speed").append(h("option", v === speed ? { value: v, selected: "" } : { value: v }, v + "× speed"));
+$("speed").onchange = (e) => speed = +e.target.value;
+$("slider").max = TOTAL;
+$("slider").oninput = (e) => { togglePlay(false); setPlay(+e.target.value); };
+let lastT = null;
+function frame(t) {
+  if (!playing) return;
+  if (lastT != null) {
+    let next = play + (t - lastT) / 1000 * speed;
+    const br = inBreak(next);
+    if (br) next = br.d + br.len;  // jump over squeezed idle time
+    setPlay(next);
+    if (play >= TOTAL) togglePlay(false);
+  }
+  lastT = t;
+  if (playing) requestAnimationFrame(frame);
+}
+function togglePlay(on) {
+  playing = on ?? !playing;
+  $("play").textContent = playing ? "Pause" : "Play";
+  if (playing) { if (play >= TOTAL) setPlay(0); lastT = null; requestAnimationFrame(frame); }
+}
+function step(dir) {
+  togglePlay(false);
+  if (dir > 0) { const i = bisectRight(stops, play + 1e-6, (v) => v); if (i < stops.length) setPlay(stops[i]); }
+  else { const i = bisectRight(stops, play - 1e-6, (v) => v) - 1; setPlay(i >= 0 ? stops[i] : 0); }
+}
+$("play").onclick = () => togglePlay();
+$("next").onclick = () => step(1);
+$("prev").onclick = () => step(-1);
+document.addEventListener("keydown", (e) => {
+  const el = e.target instanceof Element ? e.target : null;
+  if (el && el.matches("input, select, textarea")) return;
+  if (el && el.matches("button, [tabindex]") && (e.key === " " || e.key === "Enter")) return;  // let the focused control act
+  if (e.key === " ") { e.preventDefault(); togglePlay(); }
+  else if (e.key === "ArrowRight") { e.preventDefault(); step(1); }
+  else if (e.key === "ArrowLeft") { e.preventDefault(); step(-1); }
+  else if (e.key === "Home") setPlay(0);
+  else if (e.key === "End") setPlay(TOTAL);
+});
+function setZoom(z) { zoom = Math.min(256, Math.max(1, z)); draw(); setPlay(play); }
+function zoomTo(d0, d1) {
+  // fit [d0, d1] into about two thirds of the visible width
+  zoom = Math.min(256, Math.max(1, TOTAL / ((d1 - d0) * 1.5)));
+  draw();
+  area.scrollLeft = (X(d0) + X(d1)) / 2 - area.clientWidth / 2;
+  setPlay(play, true);
+}
+$("zin").onclick = () => setZoom(zoom * 2);
+$("zout").onclick = () => setZoom(zoom / 2);
+$("zfit").onclick = () => setZoom(1);
+let resizeTimer = null;
+window.addEventListener("resize", () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(() => { draw(); setPlay(play, true); }, 120); });
+
+// ---------------------------------------------------------------- notes
+const notes = [
+  `Idle gaps longer than ${Math.round(D.gap / 60)} minutes are squeezed into grey bands; the clock and "active time" skip them.`,
+  "Costs are API-equivalent: what these tokens would cost at list prices, not what a subscription charges.",
+];
+if (D.totals.copied) notes.push(`${D.totals.copied} model calls are history copied from an older session (a fork or resume). They are shown faded and also count toward that older session.`);
+notes.push("Tool results are not stored, only their size. Subagent lineage comes from text matching: \"used\" held up against a model check; \"unclear\" is a weak match.");
+if (D.redacted) notes.push("This page is redacted: every piece of transcript text was replaced by its length.");
+notes.push("Made by flightrec from Claude Code transcripts on this machine. Claude Code versions: " + (D.versions.join(", ") || "?") + ".");
+$("notes").replaceChildren(...notes.map((n) => h("div", {}, n)));
+
+// ---------------------------------------------------------------- go
+drawLabels();
+renderFindings();
+select({ type: "agent", i: 0 }, true);
+setPlay(TOTAL, true);
+</script>
+</body>
+</html>

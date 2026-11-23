@@ -1,6 +1,7 @@
 # Personal data: transcripts, snapshots and generated reports never go to git.
 data/
 out/
+flightrec-view/
 *.jsonl
 !tests/**/*.jsonl
 

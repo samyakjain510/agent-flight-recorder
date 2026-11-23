@@ -241,6 +241,7 @@ def _read_agent(records: List[dict], agent: Agent, run: Run, links: _Links) -> N
                     continue
                 if b.get("type") == "text" and b.get("text"):
                     agent.outputs.append((ts, b["text"]))
+                    agent.said.append((ts, b["text"]))
                 if b.get("type") == "tool_use" and b.get("id") not in calls:
                     inp = b.get("input") if isinstance(b.get("input"), dict) else {}
                     calls[b["id"]] = ToolCall(

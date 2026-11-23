@@ -1,10 +1,10 @@
 # flightrec
 
-A local flight recorder for multi-agent Claude Code runs. It reads the transcripts Claude Code already writes on your machine and shows the tree of lead agent and subagents, the instructions each one got, tokens, time and API-equivalent cost per branch, and then what was repeated, what each subagent's startup cost, whether its work was used, and who approved what.
+A local flight recorder for multi-agent Claude Code runs. It reads the transcripts Claude Code already writes on your machine and shows the tree of lead agent and subagents, the instructions each one got, tokens, time and API-equivalent cost per branch, and then what was repeated, what each subagent's startup cost, whether its work was used, and who approved what. Each run can be opened as a single offline HTML page with a lane per agent and a replay.
 
 Nothing leaves your machine. There are no network calls and no dependencies beyond Python 3.9+.
 
-**Status:** Phase 2 of 5 (reader and analyzers). Private while in progress.
+**Status:** Phase 3 of 5 (reader, analyzers, viewer). Private while in progress.
 
 ## Try it
 
@@ -16,9 +16,11 @@ flightrec show <session-id-prefix> # the tree, with tokens and time per branch
 flightrec analyze <session-id-prefix>  # startup cost, repeated work, lineage, conflicts, approvals
 flightrec analyze --all            # the same, summarized across every multi-agent session
 flightrec check --all              # compare token counts with Claude Code's own totals
+flightrec view <session-id-prefix> --open   # one offline HTML page: lanes, replay, findings
+flightrec view --all --open        # a page per multi-agent run, plus an index
 ```
 
-Add `--redact` before the command to hide titles, descriptions and instructions, for example when sharing a screenshot.
+Add `--redact` before the command to replace every piece of transcript text (titles, instructions, reports, commands, paths) with its length, for example before sharing a page or a screenshot. Pages go to `./flightrec-view/` unless you pass `--out`.
 
 ## How we know the numbers are right
 

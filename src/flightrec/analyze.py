@@ -27,7 +27,7 @@ from datetime import datetime, timedelta
 from typing import Dict, Iterable, Iterator, List, Optional, Set, Tuple
 
 from .model import Agent, Run, ToolCall, Usage
-from .pricing import PRICES, usage_cost
+from .pricing import PRICES, request_cost, usage_cost
 
 DEFAULT_CHARS_PER_TOKEN = 2.0  # median measured on the author's transcripts (Nov 2026); calibrate() replaces it
 
@@ -439,3 +439,30 @@ def peak_parallel(run: Run) -> int:
         cur += d
         peak = max(peak, cur)
     return peak
+
+
+# ---------------------------------------------------------------- everything for one run
+
+def summarize(run: Run, scale: TokenScale, only_owned: bool = False) -> dict:
+    """All findings for one run. only_owned: leave out history copied from an older file,
+    so that summing over many runs counts each call once."""
+    owned_ids = {r.id for r in run.requests() if r.owned or not only_owned}
+    reqs = [r for r in run.requests() if r.id in owned_ids]
+    costs = [request_cost(r) for r in reqs]
+    by_agent_cost: Counter = Counter()
+    for r, c in zip(reqs, costs):
+        by_agent_cost["lead" if r.agent_id == "main" else "sub"] += c or 0.0
+    return {
+        "run": run,
+        "cost": sum(c or 0.0 for c in costs),
+        "cost_unknown": sum(1 for c in costs if c is None),
+        "lead_cost": by_agent_cost["lead"],
+        "sub_cost": by_agent_cost["sub"],
+        "startup": [s for s in startup_costs(run)
+                    if not only_owned or all(r.id in owned_ids for r in s.agent.requests)],
+        "repeats": [x for x in find_repeats(run, scale) if x.call.request_id in owned_ids],
+        "lineage": lineage(run),
+        "conflicts": file_conflicts(run),
+        "approvals": approvals(run, owned_ids if only_owned else None),
+        "peak": peak_parallel(run),
+    }

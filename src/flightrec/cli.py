@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import argparse
+import os
 import statistics
 import sys
+import webbrowser
 from collections import Counter
 from typing import List, Optional
 
@@ -209,28 +211,7 @@ def _agent_label(agent, redact: bool) -> str:
 
 
 def _analysis(run: Run, scale, only_owned: bool = False) -> dict:
-    from . import analyze as az
-    from .pricing import request_cost
-
-    owned_ids = {r.id for r in run.requests() if r.owned or not only_owned}
-    reqs = [r for r in run.requests() if r.id in owned_ids]
-    costs = [request_cost(r) for r in reqs]
-    by_agent_cost = Counter()
-    for r, c in zip(reqs, costs):
-        by_agent_cost["lead" if r.agent_id == "main" else "sub"] += c or 0.0
-    return {
-        "run": run,
-        "cost": sum(c or 0.0 for c in costs),
-        "cost_unknown": sum(1 for c in costs if c is None),
-        "lead_cost": by_agent_cost["lead"],
-        "sub_cost": by_agent_cost["sub"],
-        "startup": [s for s in az.startup_costs(run) if not only_owned or all(r.id in owned_ids for r in s.agent.requests)],
-        "repeats": [x for x in az.find_repeats(run, scale) if x.call.request_id in owned_ids],
-        "lineage": az.lineage(run),
-        "conflicts": az.file_conflicts(run),
-        "approvals": az.approvals(run, owned_ids if only_owned else None),
-        "peak": az.peak_parallel(run),
-    }
+    return az.summarize(run, scale, only_owned)
 
 
 def cmd_analyze(args) -> int:
@@ -374,6 +355,43 @@ def _analyze_all(runs: List[Run], scale, args, corpus=None) -> int:
 
 # ---------------------------------------------------------------- main
 
+# ---------------------------------------------------------------- view
+
+def cmd_view(args) -> int:
+    from . import view
+
+    if not args.all and not args.session:
+        raise SystemExit("give a session id (or its first characters), or --all")
+    corpus = request_index(args.root)
+    paths = _pick_sessions(args.root, False) if args.all else [_find_one(args.root, args.session)]
+    scale = az.calibrate(parse_session(p) for p in find_sessions(args.root))
+    os.makedirs(args.out, exist_ok=True)
+    rows, written = [], []
+    for path in paths:
+        run = parse_session(path)
+        mark_shared(run, corpus)
+        payload = view.build(run, scale, redact=args.redact)
+        name = run.session_id[:8] + ".html"
+        with open(os.path.join(args.out, name), "w", encoding="utf-8") as f:
+            f.write(view.render(payload))
+        written.append(os.path.join(args.out, name))
+        rows.append(view.index_row(payload, name))
+    first = written[0] if written else None
+    if args.all:
+        rows.sort(key=lambda r: r["started"] or 0, reverse=True)
+        first = os.path.join(args.out, "index.html")
+        with open(first, "w", encoding="utf-8") as f:
+            f.write(view.index_page(rows))
+        print(f"wrote {len(written)} run pages and an index to {os.path.abspath(args.out)}")
+    for w in ([] if args.all else written):
+        print(f"wrote {os.path.abspath(w)}")
+    if args.redact:
+        print("redacted: transcript text was replaced by its length")
+    if args.open and first:
+        webbrowser.open("file://" + os.path.abspath(first))
+    return 0
+
+
 def main(argv: Optional[List[str]] = None) -> int:
     p = argparse.ArgumentParser(
         prog="flightrec",
@@ -381,7 +399,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     )
     p.add_argument("--version", action="version", version=f"flightrec {__version__}")
     p.add_argument("--root", default=None, help="transcripts folder (default: ~/.claude/projects)")
-    p.add_argument("--redact", action="store_true", help="hide titles, descriptions and instructions")
+    p.add_argument("--redact", action="store_true",
+                   help="hide transcript text (titles, instructions, reports, commands, paths), keeping numbers and times")
     sub = p.add_subparsers(dest="cmd")
 
     s = sub.add_parser("list", help="list sessions (those with subagents, unless --all)")
@@ -402,6 +421,13 @@ def main(argv: Optional[List[str]] = None) -> int:
     s.add_argument("--all", action="store_true", help="check every session, not only those with subagents")
     s.add_argument("--verbose", action="store_true", help="show per-model detail for every session")
     s.set_defaults(func=cmd_check)
+
+    s = sub.add_parser("view", help="write a self-contained HTML page for a run: lanes per agent, replay, findings")
+    s.add_argument("session", nargs="?", help="session id, or its first few characters")
+    s.add_argument("--all", action="store_true", help="a page for every session that used subagents, plus an index")
+    s.add_argument("--out", default="flightrec-view", help="folder for the pages (default: ./flightrec-view)")
+    s.add_argument("--open", action="store_true", help="open the page in your browser")
+    s.set_defaults(func=cmd_view)
 
     args = p.parse_args(argv)
     if not getattr(args, "func", None):

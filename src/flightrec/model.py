@@ -143,6 +143,7 @@ class Agent:
     report_chars: int = 0
     report_text: str = ""  # kept in memory for lineage; never printed unless asked
     outputs: List[Tuple[Optional[datetime], str]] = field(default_factory=list)  # what this agent wrote
+    said: List[Tuple[Optional[datetime], str]] = field(default_factory=list)  # its plain text messages only
     events: List[Event] = field(default_factory=list)
 
     def usage(self) -> Usage:

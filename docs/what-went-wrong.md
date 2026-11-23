@@ -35,3 +35,15 @@ A running log of mistakes, wrong guesses and surprises, and what changed because
 **My weak-match verdict fired by chance.** In a blind check, I showed reports next to a lead from a different session, where the right answer has to be "not used". My matcher said "some trace" on 2 of 6. Change: renamed it "unclear".
 
 **The model judge over-credited.** Haiku said all 18 real reports were used at least partly. In 4 of the 5 cases where my matcher found nothing, everything Haiku cited was already in the lead's work before the report arrived, despite a prompt telling it that doesn't count. Change: I kept text matching as the tool's method and the model as a cross-check, and checked the model's evidence mechanically instead of trusting its verdict.
+
+## Phase 3 (Nov 23, 2026)
+
+**Idle bands crowded out the work.** My longest run has 33 idle gaps. At a fixed width per gap, the squeezed bands took 40% of the screen. Change: all breaks together get about a tenth of the active time, each between 0.4% and 2% of it.
+
+**Selecting an agent hid its own work.** Clicking an agent moved the playhead to its start, so everything it did was in the faded "not yet happened" part. Change: the playhead goes to when its report came back.
+
+**Parallel helpers were unreadable at full width.** Eight subagents that all ran inside one minute of a 75-minute session showed up as a sliver. Change: a "Zoom to its time" button fits one agent's work to the screen.
+
+**An answer looked like an approval.** Claude Code records you answering a question the agent asked (`AskUserQuestion`) as a permission decision, so the page said "You approved AskUserQuestion". Change: the page now says you answered a question. The approval counts in Phase 2 include these too; the study needs to separate them.
+
+**The app's browser won't run scripts in local files outside the project folder.** To check pages I served the redacted folder from a small local web server (localhost only). Only redacted pages were ever opened in a browser I can see.
