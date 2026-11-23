@@ -161,6 +161,14 @@ class ApprovalTests(unittest.TestCase):
         self.assertEqual(rep.by_source["user_temporary"], 2)
         self.assertEqual([c.id for c in rep.quick_risky()], ["c1"])
 
+    def test_answers_are_not_approvals(self):
+        run = make_run()
+        q = call("q", "main", "AskUserQuestion", 0, done=30, questions=[])
+        q.approval = Approval("q", "accept", "user_temporary")
+        run.agents["main"].tool_calls = [q]
+        rep = az.approvals(run)
+        self.assertEqual((rep.total, len(rep.human), len(rep.answers)), (1, 0, 1))
+
     def test_copied_history_skipped(self):
         # A fork copies earlier calls; counting only owned requests must drop their approvals.
         run = make_run()

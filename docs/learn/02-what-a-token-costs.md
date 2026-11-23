@@ -31,7 +31,7 @@ These are first results, not the study.
 - **Total:** about $162 API-equivalent. Subagents were 16% of it.
 - **Startup cost:** a subagent starts with a median of 48k tokens of context before it does anything: system prompt, tool list, memory files, its instructions. Across all subagents that base context is 23% of their cost. For small jobs it dominates. In one session, each of 8 subagents started with about 42k tokens and ran only 4 or 5 calls, so the base context was 68 to 83% of each one's cost.
 - **Repeated work:** zero repeats inside a single agent. Sixteen times one agent read a file another had already read, all of them file reads, at most $0.77 (0.5% of cost). For my runs, re-reading files is a small cost.
-- **Where subagent work went** (30 subagents): 19 used, 4 unclear, 3 left a file nobody else touched, 2 with no trace found, 2 never sent a report. (A first count said 33; forks carry copies of their source's subagents, so 3 were counted twice.)
+- **Where subagent work went** (30 subagents): 22 used, 4 unclear, 2 left a file nobody else touched, 2 with no trace found. (A first count said 33; forks carry copies of their source's subagents, so 3 were counted twice. Until Phase 4 the reader also dropped reports from background subagents, which made 2 look like they never reported; see what-went-wrong.)
 - **File conflicts:** none. No two agents wrote the same file.
 - **Approvals:** in the calls these sessions made themselves, a person decided none of about 1,660 permission decisions. Settings decided all of them. (A first count said 1 of 2,029; that one human decision was a copy from an older file.)
 
@@ -50,7 +50,7 @@ Three known answers is a thin test, so I checked it against a model.
 
 `scripts/judge_lineage.py` asks Haiku, once per subagent report, whether the lead's later work relied on it. Haiku sees the instructions, the report, a little of what the lead wrote before, and the next 60,000 characters of what the lead did after. It never sees my verdict. Mixed in are 6 controls: a report shown next to a lead from a different session, where the right answer has to be "not used".
 
-18 reports qualified (the other 12 subagents sent no text report, or their work came back only as files, which is a recorded fact and needs no judge). The run took 24 calls, about 3 minutes, and 680k Haiku tokens, about $0.12 at API prices, on my Pro plan.
+18 reports qualified at the time. (In Phase 4 I found the reader had been dropping reports from background subagents; with that fixed, 30 of 30 subagents have a report, so 12 more await the same check.) The run took 24 calls, about 3 minutes, and 680k Haiku tokens, about $0.12 at API prices, on my Pro plan.
 
 | My verdict | Haiku said | Reading |
 |---|---|---|

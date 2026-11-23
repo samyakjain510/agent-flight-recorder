@@ -301,11 +301,12 @@ def _findings(run: Run, summary: dict, clock: Clock, idx: Dict[str, int],
             "detail": f"{_text(c.path, redact, TARGET_LIMIT)}: "
                       + ", ".join(agent_label(run.agents[x], idx[x], redact) for x in c.agents if x in run.agents),
         })
-    for call, secs in summary["approvals"].human:
+    ap_rep = summary["approvals"]
+    for call, secs in ap_rep.human + [(c, None) for c in ap_rep.answers]:
         ap = call.approval
         verb = "approved" if ap.decision == "accept" else "rejected"
         # Answering a question the agent asked is recorded as a permission decision too.
-        title = ("You answered a question the agent asked" if call.name == "AskUserQuestion"
+        title = ("You answered a question the agent asked" if call.name in az.QUESTION_TOOLS
                  else f"You {verb} {call.name}")
         out.append({
             "kind": "approval", "a": idx[call.agent_id], "d": clock(_t(call.started)),

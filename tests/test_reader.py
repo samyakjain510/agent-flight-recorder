@@ -211,6 +211,24 @@ class ReaderTests(unittest.TestCase):
         self.assertEqual(text_len([{"type": "text", "text": "abc"}, {"type": "tool_result", "content": "de"}]), 5)
 
 
+    def test_background_report_marked_meta(self):
+        # Real Claude Code (2.1.2xx-2.1.3xx) delivers a background report as a user record with
+        # isMeta: true and origin.kind "peer". It is a report, not a person's message.
+        path = multi_agent_session(self.fake)
+        with open(path) as f:
+            lines = [json.loads(x) for x in f if x.strip().startswith("{") and "not json" not in x]
+        lines = [x for x in lines if x.get("type") != "attachment"]
+        lines.append({"type": "user", "timestamp": ts(7), "isMeta": True,
+                      "origin": {"kind": "peer", "from": "a1", "handback": True, "handbackReportText": "found X again"},
+                      "message": {"role": "user", "content": "<report>found X again</report>"}})
+        with open(path, "w") as f:
+            f.write("\n".join(json.dumps(x) for x in lines) + "\n")
+        run = parse_session(path)
+        self.assertEqual(run.agents["a1"].report_text, "found X again")
+        self.assertEqual(run.agents["a1"].report_at, parse_ts(ts(7)))
+        self.assertEqual(len(run.human_messages), 1)  # the report is not counted as a message from a person
+
+
 class CheckTests(unittest.TestCase):
     def setUp(self):
         self.fake = FakeRoot()

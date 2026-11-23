@@ -4,8 +4,8 @@
 |---|---|---|
 | 1. Reader | Turn transcripts into one clean run model. Cross-check token totals against Claude Code's own. | Done Nov 23 |
 | 2. Analyzers | Prices checked against Claude Code's records; token size of tool results measured; repeated work, startup cost, lineage (report + files), file conflicts, approvals, parallelism. | Done Nov 23, including a model check of the lineage verdicts |
-| 3. Viewer | One local HTML file per run: tree, a lane per agent on a timeline you can step through, findings pinned in place. | Built Nov 23; waiting for Samyak to look at a real run |
-| 4. Study | Run on my own sessions. Private report first; I decide what can go public (aggregate numbers only). | |
+| 3. Viewer | One local HTML file per run: tree, a lane per agent on a timeline you can step through, findings pinned in place. | Done Nov 23 |
+| 4. Study | Run on my own sessions. Private report first; I decide what can go public (aggregate numbers only). | `flightrec study` built; private report drafted Nov 23; Haiku check of 12 newly found reports waiting for OK |
 | 5. Ship | Demo run made on purpose on a public repo, redacted. README, one-command install, write-up, demo page. Nothing public without my approval. | |
 
 Open questions

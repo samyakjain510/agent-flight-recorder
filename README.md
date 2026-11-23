@@ -4,7 +4,7 @@ A local flight recorder for multi-agent Claude Code runs. It reads the transcrip
 
 Nothing leaves your machine. There are no network calls and no dependencies beyond Python 3.9+.
 
-**Status:** Phase 3 of 5 (reader, analyzers, viewer). Private while in progress.
+**Status:** Phase 4 of 5 (reader, analyzers, viewer, study). Private while in progress.
 
 ## Try it
 
@@ -18,6 +18,7 @@ flightrec analyze --all            # the same, summarized across every multi-age
 flightrec check --all              # compare token counts with Claude Code's own totals
 flightrec view <session-id-prefix> --open   # one offline HTML page: lanes, replay, findings
 flightrec view --all --open        # a page per multi-agent run, plus an index
+flightrec study --json study.json  # aggregate findings across every multi-agent run
 ```
 
 Add `--redact` before the command to replace every piece of transcript text (titles, instructions, reports, commands, paths) with its length, for example before sharing a page or a screenshot. Pages go to `./flightrec-view/` unless you pass `--out`.

@@ -47,3 +47,13 @@ A running log of mistakes, wrong guesses and surprises, and what changed because
 **An answer looked like an approval.** Claude Code records you answering a question the agent asked (`AskUserQuestion`) as a permission decision, so the page said "You approved AskUserQuestion". Change: the page now says you answered a question. The approval counts in Phase 2 include these too; the study needs to separate them.
 
 **The app's browser won't run scripts in local files outside the project folder.** To check pages I served the redacted folder from a small local web server (localhost only). Only redacted pages were ever opened in a browser I can see.
+
+## Phase 4 (Nov 23, 2026)
+
+**The reader dropped every report from a background subagent.** It skipped records Claude Code marks `isMeta` (not typed by a person) before checking whether they carried a subagent's report, and all 24 background reports in my history carry that mark. My test used an older delivery shape, so it passed. I found it because the first study run said 24% of subagent spend went to two subagents that "never reported"; their transcripts ended with a hand-back call, so I checked the lead's file. Change: reports are read before meta records are skipped, with a test using the real shape (it fails on the old reader). Effects: every subagent reported; lineage is now 22 used, 4 unclear, 2 file left, 2 no trace (was 19 / 4 / 3 / 2 plus 2 "no report"); 12 reports that the Haiku check never saw now exist.
+
+**The controls in the Haiku check were named by position.** "control-2" meant the second pair drawn from the list of real cases. When the fix above added cases, the same name pointed at a different pair. Change: each control is named after its pair; the first round's control results are kept but set aside.
+
+**Messages from me were counted twice in forks.** A fork copies earlier messages. Change: each message is counted once by its time (170 became 158).
+
+**The delegation estimate leaned on one assumption.** Most of the estimated saving came from the lead carrying the subagent's reading for its remaining calls, which assumes nothing is compacted or cleared. Change: it is reported as a range, from "kept" to "dropped right away".

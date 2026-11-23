@@ -291,6 +291,8 @@ def _analyze_one(run: Run, scale, args) -> int:
         if waits:
             print(f"  by a person: {len(waits)} · median {statistics.median(waits):.0f}s from the call to its result"
                   f" (includes running time)")
+        if ap.answers:
+            print(f"  answers you gave to the agent's questions: {len(ap.answers)} (recorded as permission decisions)")
         risky = ap.quick_risky()
         if risky:
             print(f"  risky commands a person allowed in under 3s: {len(risky)}")
@@ -349,7 +351,8 @@ def _analyze_all(runs: List[Run], scale, args, corpus=None) -> int:
     print(f"  files written by several agents: {sum(1 for a in rows for c in a['conflicts'] if c.kind == 'several writers')}"
           f" · stale writes: {sum(1 for a in rows for c in a['conflicts'] if c.kind == 'stale write')}")
     print(f"  approvals by a person: {sum(len(a['approvals'].human) for a in rows)}"
-          f" of {sum(a['approvals'].total for a in rows)} decisions")
+          f" of {sum(a['approvals'].total for a in rows)} decisions"
+          f" · answers to the agent's questions: {sum(len(a['approvals'].answers) for a in rows)}")
     return 0
 
 
@@ -392,6 +395,69 @@ def cmd_view(args) -> int:
     return 0
 
 
+# ---------------------------------------------------------------- study
+
+def cmd_study(args) -> int:
+    import json
+    from datetime import datetime as _dt
+
+    from . import study as st
+
+    r = st.study(args.root)
+    if args.json:
+        with open(args.json, "w", encoding="utf-8") as f:
+            json.dump(r, f, indent=1, default=str)
+    c, sp, su, de, pa, ov, wa, ap, bs = (r[k] for k in ("corpus", "spend", "startup", "delegation", "parallel",
+                                                       "overlap", "waste", "approvals", "blind_spots"))
+    day = lambda t: _dt.fromtimestamp(t).strftime("%Y-%m-%d") if t else "?"
+    print(f"Corpus: {c['multi_agent_sessions']} multi-agent sessions of {c['sessions']} ({day(c['first'])} to {day(c['last'])}),"
+          f" {c['subagents']} subagents ({c['subagents_with_transcript']} with transcripts), {c['claude_code_versions']} Claude Code versions")
+    print(f"  multi-agent sessions: {_money(c['cost_multi'])} of {_money(c['cost_all'])} API-equivalent"
+          f" ({c['cost_multi'] / c['cost_all'] * 100:.0f}%)" if c["cost_all"] else "")
+    print(f"\nSpend: lead {_money(sp['lead_cost'])}, subagents {_money(sp['subagent_cost'])} ({sp['subagent_share_pct']}%);"
+          f" median subagent {_money(sp['per_subagent_cost_median'])}, largest {_money(sp['per_subagent_cost_max'])}")
+    for k, v in sp["by_type"].items():
+        print(f"  {k:24} {v['count']:>3} subagents  {_money(v['cost']):>8}  median {v['median_calls']} calls")
+    print(f"\nStartup: base context {fmt.tokens(su['base_tokens_min'] or 0)} to {fmt.tokens(su['base_tokens_max'] or 0)} tokens"
+          f" (median {fmt.tokens(int(su['base_tokens_median'] or 0))}); carrying it = {su['carried_share_pct']}% of subagent cost")
+    for b in su["by_size"]:
+        print(f"  {b['size']:11} {b['subagents']:>3} subagents · median {b['median_share_pct']}% of each one's cost · {_money(b['cost'])}")
+    print(f"\nDelegation (estimate; see study.py for assumptions): {de['subagents']} subagents")
+    dr = de["drop"]
+    print(f"  if the lead would have kept the material in context: delegating {_money(de['delegated_total'])} vs inline about"
+          f" {_money(de['inline_total'])}; cheaper to delegate in {de['delegation_cheaper']} of {de['subagents']}"
+          f" ({de['delegation_cheaper_at_lead_prices']} at the lead's model prices)")
+    print(f"  if it would have dropped it right away: delegating {_money(dr['delegated_total'])} vs inline about"
+          f" {_money(dr['inline_total'])}; cheaper in {dr['cheaper']} of {de['subagents']}"
+          f" ({dr['cheaper_at_lead_prices']} at the lead's model prices)")
+    for k in ("small_jobs", "bigger_jobs"):
+        g = de[k]
+        if g["subagents"]:
+            print(f"  {k.replace('_', ' ')} ({'1-5' if k == 'small_jobs' else '6+'} calls): {g['subagents']},"
+                  f" cheaper in {g['cheaper']}, median delegated/inline {g['median_ratio']:.2f}")
+    print(f"\nParallel: {pa['parallel_fanouts']} fan-outs of 2+ subagents (sizes {pa['sizes']}), {pa['single']} single delegations;"
+          f" {pa['parallel_serial_minutes']} min of subagent time ran in {pa['parallel_wall_minutes']} min"
+          f" (saved {pa['minutes_saved']} min). Lead: {pa['lead_waited_vs_background']}")
+    print(f"  overlap between sibling reports: median {ov['sibling_overlap_median_pct']}% of distinctive items"
+          f" (max {ov['sibling_overlap_max_pct']}%), against {ov['baseline_overlap_median_pct']}% for unrelated reports"
+          f" · {ov['reports_measured']} reports in {ov['fanouts_with_reports']} fan-outs")
+    print(f"\nWaste: repeats {wa['repeats_within_agent']} within agents, {wa['repeats_across_agents']} across"
+          f" ({wa['repeats_between_subagents']} between subagents) · {fmt.tokens(wa['repeat_tokens'])} tokens ·"
+          f" up to {_money(wa['repeat_cost_upper'])} ({wa['repeat_share_pct']}% of cost)")
+    print("  subagent work by cost: " + ", ".join(f"{k} {_money(v)} ({wa['lineage_cost_pct'][k]}%)" for k, v in wa["lineage_cost"].items()))
+    print(f"  file conflicts: {wa['conflicts_several_writers']} several writers, {wa['conflicts_stale_writes']} stale writes")
+    m, a_ = ap["multi_agent_sessions"], ap["all_sessions"]
+    print(f"\nApprovals: multi-agent runs {m['by_person']} by you of {m['decisions']} ({m['answers_to_questions']} answers to questions);"
+          f" all sessions {a_['by_person']} by you of {a_['decisions']}, {a_['rejected_by_person']} rejected,"
+          f" {a_['answers_to_questions']} answers · {ap['messages_from_you_in_multi_agent_runs']} messages from you in multi-agent runs")
+    print(f"\nBlind spots: in {bs['clean_sessions_checked']} clean sessions, {bs['hidden_token_share_pct']}% of tokens were in calls"
+          f" the transcript doesn't show ({bs['clean_sessions_exact']} exact, {bs['overcounts']} overcounts);"
+          f" {bs['compactions']} compactions; {bs['image_or_document_results']} image/document results with no token size")
+    if args.json:
+        print(f"\nall numbers saved to {args.json}")
+    return 0
+
+
 def main(argv: Optional[List[str]] = None) -> int:
     p = argparse.ArgumentParser(
         prog="flightrec",
@@ -421,6 +487,10 @@ def main(argv: Optional[List[str]] = None) -> int:
     s.add_argument("--all", action="store_true", help="check every session, not only those with subagents")
     s.add_argument("--verbose", action="store_true", help="show per-model detail for every session")
     s.set_defaults(func=cmd_check)
+
+    s = sub.add_parser("study", help="aggregate findings across every multi-agent run (the numbers for a write-up)")
+    s.add_argument("--json", help="also save every number to this JSON file")
+    s.set_defaults(func=cmd_study)
 
     s = sub.add_parser("view", help="write a self-contained HTML page for a run: lanes per agent, replay, findings")
     s.add_argument("session", nargs="?", help="session id, or its first few characters")

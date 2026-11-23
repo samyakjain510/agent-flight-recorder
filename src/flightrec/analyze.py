@@ -390,12 +390,17 @@ RISKY_RE = re.compile(
 )
 
 
+# Tools whose "permission decision" is really a person answering the agent, not allowing an action.
+QUESTION_TOOLS = {"AskUserQuestion"}
+
+
 @dataclass
 class ApprovalReport:
     total: int = 0
     by_source: Counter = field(default_factory=Counter)
     rejected: int = 0
     human: List[Tuple[ToolCall, Optional[float]]] = field(default_factory=list)  # (call, seconds call→result)
+    answers: List[ToolCall] = field(default_factory=list)  # a person answered a question the agent asked
     settings_median: Dict[str, float] = field(default_factory=dict)  # tool → median seconds when settings allowed it
 
     def quick_risky(self, under_seconds: float = 3.0) -> List[ToolCall]:
@@ -417,7 +422,9 @@ def approvals(run: Run, only: Optional[Set[str]] = None) -> ApprovalReport:
         rep.by_source[a.source] += 1
         rep.rejected += a.decision != "accept"
         secs = (c.finished - c.started).total_seconds() if c.finished and c.started else None
-        if a.by_human:
+        if a.by_human and c.name in QUESTION_TOOLS:
+            rep.answers.append(c)
+        elif a.by_human:
             rep.human.append((c, secs))
         elif secs is not None:
             settings_waits[c.name].append(secs)

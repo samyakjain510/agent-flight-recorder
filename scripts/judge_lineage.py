@@ -169,7 +169,9 @@ def build_cases(root: str) -> List[Case]:
         used_reports.add(a.agent.id)
         used_leads.add(b.session)
         moved = dataclasses.replace(a.agent, report_at=b.agent.report_at)
-        controls.append(Case(f"control-{len(controls) + 1}", "control", b.session, moved, b.parent,
+        # The id names the pair itself, so saved results stay attached to the right pair
+        # even if the list of real cases (and so the random draw) changes later.
+        controls.append(Case(f"control-{a.agent.id[:8]}-on-{b.session}", "control", b.session, moved, b.parent,
                              _report_verdict(moved, b.parent),
                              _report_verdict(moved, _windowed(b.parent, moved.report_at))))
     return real + controls

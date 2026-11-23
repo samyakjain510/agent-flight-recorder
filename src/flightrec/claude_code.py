@@ -349,14 +349,19 @@ def _read_user_line(r: dict, ts, agent: Agent, run: Run, calls: Dict[str, ToolCa
         return
 
     agent.events.append(Event("context", ts, None, text_len(content)))
-    if agent.id != "main" or r.get("isMeta"):
+    if agent.id != "main":
         return
     origin = r.get("origin")
+    # A background subagent's report arrives as a "peer" message. Claude Code marks it
+    # isMeta (not typed by a person), so check for it before skipping meta records.
+    if isinstance(origin, dict) and origin.get("kind") == "peer":
+        links.deliveries.append((origin, ts))
+        return
+    if r.get("isMeta"):
+        return
     if isinstance(origin, dict):
         if origin.get("kind") == "human":
             run.human_messages.append(ts)
-        elif origin.get("kind") == "peer":
-            links.deliveries.append((origin, ts))
     elif isinstance(content, (str, list)):
         run.human_messages.append(ts)  # older versions: no origin field
 
