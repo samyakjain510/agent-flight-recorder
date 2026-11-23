@@ -26,4 +26,12 @@ A running log of mistakes, wrong guesses and surprises, and what changed because
 
 **A URL was counted twice.** Part of a URL also matched the file-path pattern. A unit test caught it. Change: URLs are removed before looking for paths and names.
 
-**The brief's example finding turned out small.** The brief suggested measuring "how much of the tokens went to re-reading the same files". For my runs that is at most 0.5% of cost. The bigger fixed cost is starting a subagent: a median of 48k tokens of context before any work. He asked, during that same turn, to be told before several agents run in parallel because they use his Pro limits. Change: I ask first now.
+**The brief's example finding turned out small.** The brief suggested measuring "how much of the tokens went to re-reading the same files". For my runs that is at most 0.5% of cost. The bigger fixed cost is starting a subagent: a median of 48k tokens of context before any work.
+
+**Forks counted the same subagents twice.** A forked session carries copies of its source's subagents. The cross-session summary counted 33 subagents; 30 are distinct. Approvals had the same problem: the "1 human approval out of 2,029" was a copy of a decision from an older file. Change: the summary counts each subagent, approval and conflict once, in the file created first, the same rule already used for model calls. Corrected: 30 subagents, 0 of 1,645 approval decisions made by a person.
+
+**I said the model check would take about 33 calls.** It took 18 real cases plus 6 controls. Three subagents were double-counted (above), and 12 sent no text report: their work came back as files, which the file channel already records as fact.
+
+**My weak-match verdict fired by chance.** In a blind check, I showed reports next to a lead from a different session, where the right answer has to be "not used". My matcher said "some trace" on 2 of 6. Change: renamed it "unclear".
+
+**The model judge over-credited.** Haiku said all 18 real reports were used at least partly. In 4 of the 5 cases where my matcher found nothing, everything Haiku cited was already in the lead's work before the report arrived, despite a prompt telling it that doesn't count. Change: I kept text matching as the tool's method and the model as a cross-check, and checked the model's evidence mechanically instead of trusting its verdict.

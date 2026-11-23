@@ -24,6 +24,16 @@ Add `--redact` before the command to hide titles, descriptions and instructions,
 
 `flightrec check` compares the reader's token counts with the running totals Claude Code keeps for each session. On my machine (Nov 23, 2026), across 42 sessions where a fair comparison is possible, the reader never counted more than Claude Code did, and matched it exactly in 17. The rest of the gap comes from calls Claude Code never writes to the transcript. See `docs/learn/01-reading-transcripts.md`.
 
+## Checking the lineage verdicts
+
+`scripts/judge_lineage.py` asks a model, through `claude -p` on your own Claude plan, whether each lead relied on each subagent report, without showing it flightrec's verdict, and mixes in mismatched pairs as controls. It is kept out of the package because it sends transcript excerpts to Anthropic; the package itself makes no network calls.
+
+```bash
+python3 scripts/judge_lineage.py --dry-run   # cases and sizes, no calls
+python3 scripts/judge_lineage.py             # one call at a time; resumes if stopped
+python3 scripts/judge_lineage.py --report    # compare
+```
+
 ## Tests
 
 ```bash

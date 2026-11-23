@@ -253,7 +253,7 @@ class Lineage:
 
     agent: Agent
     status: str
-    report_status: str = "no report"  # used / some trace / no trace found / no report / arrived after parent stopped
+    report_status: str = "no report"  # used / unclear / no trace found / no report / arrived after parent stopped
     items_total: int = 0
     items_reused: int = 0
     phrase_overlap: float = 0.0
@@ -287,7 +287,9 @@ def _report_channel(agent: Agent, parent: Agent) -> Tuple[str, int, int, float, 
     if len(reused) >= 2 or overlap >= 0.05:
         status = "used"
     elif reused or overlap >= 0.01:
-        status = "some trace"
+        # One reused item or a little phrase overlap. A model-judged check (scripts/judge_lineage.py)
+        # found this also happens by chance: 2 of 6 reports shown next to a different session's lead got it.
+        status = "unclear"
     else:
         status = "no trace found"
     return status, len(items), len(reused), overlap, first_use
@@ -325,8 +327,8 @@ def lineage(run: Run) -> List[Lineage]:
             status = "used"
         elif written and replaced == written:
             status = "replaced by another agent"
-        elif rstatus == "some trace":
-            status = "some trace"
+        elif rstatus == "unclear":
+            status = "unclear"
         elif written:
             status = "file left as written"
         elif rstatus in ("no report", "arrived after parent stopped"):
@@ -402,12 +404,14 @@ class ApprovalReport:
                 and c.approval.decision == "accept" and RISKY_RE.search(str(c.input.get("command", "")))]
 
 
-def approvals(run: Run) -> ApprovalReport:
+def approvals(run: Run, only: Optional[Set[str]] = None) -> ApprovalReport:
+    """Permission decisions in a run. `only`: count just the calls made in these model requests
+    (used to skip history a fork or resume copied from another file)."""
     rep = ApprovalReport()
     settings_waits: Dict[str, List[float]] = defaultdict(list)
     for c in run.tool_calls():
         a = c.approval
-        if a is None:
+        if a is None or (only is not None and c.request_id not in only):
             continue
         rep.total += 1
         rep.by_source[a.source] += 1

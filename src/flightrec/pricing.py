@@ -22,7 +22,7 @@ PRICES = {
     "claude-fable-5-2": (8.00, 10.00, 16.00, 0.20, 40.00),
     "claude-opus-5-5": (4.00, 5.00, 8.00, 0.20, 20.00),
     "claude-sonnet-5-5": (2.00, 2.50, 4.00, 0.10, 10.00),
-    "claude-haiku-5-5": (0.10, 0.125, 0.20, 0.01, 0.50),  # 1-hour write not seen in records; assumes the usual 2x
+    "claude-haiku-5-5": (0.10, 0.125, 0.20, 0.01, 0.50),  # 1-hour write confirmed Nov 23 2026: a claude -p call reported 1,533 1h-write tokens at $0.20/M
     "claude-haiku-4-5-20251001": (1.00, 1.25, 2.00, 0.10, 5.00),
 }
 WEB_SEARCH_PER_REQUEST = 0.01

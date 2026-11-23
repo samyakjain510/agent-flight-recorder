@@ -161,6 +161,18 @@ class ApprovalTests(unittest.TestCase):
         self.assertEqual(rep.by_source["user_temporary"], 2)
         self.assertEqual([c.id for c in rep.quick_risky()], ["c1"])
 
+    def test_copied_history_skipped(self):
+        # A fork copies earlier calls; counting only owned requests must drop their approvals.
+        run = make_run()
+        c1 = call("c1", "main", "Bash", 0, command="ls")
+        c1.request_id, c1.approval = "r-copied", Approval("c1", "accept", "user_temporary")
+        c2 = call("c2", "main", "Bash", 5, command="pwd")
+        c2.request_id, c2.approval = "r-new", Approval("c2", "accept", "config")
+        run.agents["main"].tool_calls = [c1, c2]
+        self.assertEqual(az.approvals(run).total, 2)
+        rep = az.approvals(run, only={"r-new"})
+        self.assertEqual((rep.total, len(rep.human)), (1, 0))
+
 
 class ParallelTests(unittest.TestCase):
     def test_peak(self):

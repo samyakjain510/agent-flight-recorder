@@ -228,7 +228,7 @@ def _analysis(run: Run, scale, only_owned: bool = False) -> dict:
         "repeats": [x for x in az.find_repeats(run, scale) if x.call.request_id in owned_ids],
         "lineage": az.lineage(run),
         "conflicts": az.file_conflicts(run),
-        "approvals": az.approvals(run),
+        "approvals": az.approvals(run, owned_ids if only_owned else None),
         "peak": az.peak_parallel(run),
     }
 
@@ -245,7 +245,7 @@ def cmd_analyze(args) -> int:
         runs.append(run)
     scale = az.calibrate(parse_session(p) for p in find_sessions(args.root))
     if args.all:
-        return _analyze_all(runs, scale, args)
+        return _analyze_all(runs, scale, args, corpus)
     return _analyze_one(runs[0], scale, args)
 
 
@@ -281,10 +281,11 @@ def _analyze_one(run: Run, scale, args) -> int:
     for t, n in top.most_common(5):
         print(f"    {n}× {_target_label(t, args.redact)}")
 
-    print("\nDid subagent reports reach the parent's later work? (text matching; paraphrase is missed)")
+    print("\nDid subagent reports reach the parent's later work? (text matching: \"used\" held up in a model check;"
+          " \"unclear\" is a weak match; see docs/learn/02)")
     for ln in a["lineage"]:
         parts = [f"report: {ln.report_status}"]
-        if ln.report_status in ("used", "some trace", "no trace found"):
+        if ln.report_status in ("used", "unclear", "no trace found"):
             parts[0] += f" ({ln.items_reused}/{ln.items_total} items, {ln.phrase_overlap * 100:.0f}% phrases)"
         if ln.files_written:
             parts.append(f"files: {ln.files_written} written, {ln.files_picked_up} picked up, "
@@ -320,11 +321,20 @@ def _analyze_one(run: Run, scale, args) -> int:
     return 0
 
 
-def _analyze_all(runs: List[Run], scale, args) -> int:
+def _analyze_all(runs: List[Run], scale, args, corpus=None) -> int:
     rows = [_analysis(r, scale, only_owned=True) for r in runs]
+    # A fork carries copies of its source's subagents and file writes. Count each once,
+    # in the file created first (the same rule that decides who owns a copied model call).
+    if corpus is not None:
+        rows.sort(key=lambda a: corpus.created.get(a["run"].session_id, (0.0, "", a["run"].session_id)))
+    seen_agents, seen_conflicts = set(), set()
+    for a in rows:
+        a["lineage"] = [x for x in a["lineage"] if not (x.agent.id in seen_agents or seen_agents.add(x.agent.id))]
+        keyed = [((c.path, c.kind, tuple(c.agents)), c) for c in a["conflicts"]]
+        a["conflicts"] = [c for k, c in keyed if not (k in seen_conflicts or seen_conflicts.add(k))]
     rows.sort(key=lambda a: a["run"].started.timestamp() if a["run"].started else 0)
     print(f"{'session':9} {'subs':>4} {'cost':>9} {'sub cost':>9} {'repeats in/x':>12} {'repeat cost':>11}"
-          f" {'used/trace/none/late':>20} {'people ok':>9}")
+          f" {'used/unclear/none/late':>23} {'people ok':>9}")
     for a in rows:
         run = a["run"]
         ln = Counter(x.status for x in a["lineage"])
@@ -332,7 +342,7 @@ def _analyze_all(runs: List[Run], scale, args) -> int:
         print(f"{run.session_id[:8]:9} {len(run.subagents):>4} {_money(a['cost']):>9} {_money(a['sub_cost']):>9}"
               f" {sum(x.within_agent for x in reps):>5}/{sum(not x.within_agent for x in reps):<6}"
               f" {_money(sum(x.cost for x in reps)):>11}"
-              f" {ln['used']:>5}/{ln['some trace']}/{ln['no trace found']}/{ln['arrived after parent stopped']:<6}"
+              f" {ln['used']:>8}/{ln['unclear']}/{ln['no trace found']}/{ln['arrived after parent stopped']:<6}"
               f" {len(a['approvals'].human):>9}")
 
     total = sum(a["cost"] for a in rows)

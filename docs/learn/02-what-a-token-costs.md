@@ -31,9 +31,9 @@ These are first results, not the study.
 - **Total:** about $162 API-equivalent. Subagents were 16% of it.
 - **Startup cost:** a subagent starts with a median of 48k tokens of context before it does anything: system prompt, tool list, memory files, its instructions. Across all subagents that base context is 23% of their cost. For small jobs it dominates. In one session, each of 8 subagents started with about 42k tokens and ran only 4 or 5 calls, so the base context was 68 to 83% of each one's cost.
 - **Repeated work:** zero repeats inside a single agent. Sixteen times one agent read a file another had already read, all of them file reads, at most $0.77 (0.5% of cost). For my runs, re-reading files is a small cost.
-- **Where subagent work went** (33 subagents): 20 used, 4 with some trace, 3 left a file nobody else touched, 2 with no trace found, 4 never sent a report.
+- **Where subagent work went** (30 subagents): 19 used, 4 unclear, 3 left a file nobody else touched, 2 with no trace found, 2 never sent a report. (A first count said 33; forks carry copies of their source's subagents, so 3 were counted twice.)
 - **File conflicts:** none. No two agents wrote the same file.
-- **Approvals:** a person decided 1 of 2,029 permission decisions in these sessions. Settings decided the rest.
+- **Approvals:** in the calls these sessions made themselves, a person decided none of about 1,660 permission decisions. Settings decided all of them. (A first count said 1 of 2,029; that one human decision was a copy from an older file.)
 
 ## How "used" is decided, and how much to trust it
 
@@ -44,7 +44,32 @@ Work comes back two ways, so lineage checks both:
 
 I tested it on the one run where I know the answer: the planning session for this project. Three research helpers reported back and I used all three, in my own words. The first version, which matched URLs, paths, numbers and phrases, called only 1 of the 3 "used". Adding names fixed it: 3 of 3.
 
-Three known answers is a thin test, and names make false alarms easier. The proper check is to ask a model, for each subagent, whether the parent's later work relied on its report, and compare. That is about 33 short Haiku calls through `claude -p`. I'll run it only with Samyak's OK.
+Three known answers is a thin test, so I checked it against a model.
+
+### Checking the checker
+
+`scripts/judge_lineage.py` asks Haiku, once per subagent report, whether the lead's later work relied on it. Haiku sees the instructions, the report, a little of what the lead wrote before, and the next 60,000 characters of what the lead did after. It never sees my verdict. Mixed in are 6 controls: a report shown next to a lead from a different session, where the right answer has to be "not used".
+
+18 reports qualified (the other 12 subagents sent no text report, or their work came back only as files, which is a recorded fact and needs no judge). The run took 24 calls, about 3 minutes, and 680k Haiku tokens, about $0.12 at API prices, on my Pro plan.
+
+| My verdict | Haiku said | Reading |
+|---|---|---|
+| used (9) | relied 8, partly 1 | Agree in all 9. |
+| some trace (4) | relied 3, partly 1 | Haiku says used. One case shows real use my matcher underrated. |
+| no trace found (5) | relied 3, partly 2 | Disagree in all 5. See below. |
+| controls (6) | not used 6 | Haiku right in all 6. My matcher said "some trace" on 2 of them. |
+
+Neither side is ground truth, so I checked Haiku's evidence without reading it. For each case, the script takes the names, numbers and longer words Haiku cites, keeps the ones found in both the report and the lead's later work, and asks whether the lead already had them before the report arrived. When both methods say "used", 1 to 7 cited items are new. In 4 of the 5 "no trace found" cases, every item Haiku cites was already in the lead's earlier work. Haiku was crediting the report with things the lead already knew, even though the prompt told it not to. Four of those five are from one session where 8 helpers did similar jobs in parallel, so the lead had already seen the same content from a sibling.
+
+Haiku's confidence lines up with this. All 6 of its confidence-5 verdicts have at least one new item. Its confidence-3 verdicts have at most one.
+
+What changed in the tool:
+
+- **"used" stays.** A model agreed in 9 of 9.
+- **"some trace" is now "unclear".** A single matching item or a little shared phrasing also happened by chance in 2 of 6 mismatched pairs, so it can't tell use from coincidence.
+- **"no trace found" stays, with a clearer meaning:** nothing new from the report reached the later work. The lead may still have read it and found nothing it didn't already have, which is its own kind of waste when helpers run in parallel on overlapping jobs.
+
+Limits: 18 real cases, 8 from one session. A model judge is not ground truth either; it over-credits shared topics. Text matching misses use that leaves no names or numbers behind, such as a recommendation followed in different words.
 
 ## Words
 
@@ -52,3 +77,5 @@ Three known answers is a thin test, and names make false alarms easier. The prop
 - **Fingerprint (hash):** a short code computed from content. Identical content always gives the same code, and different content almost never does.
 - **Carried cost:** what a piece of context costs over the rest of an agent's life, because it is re-read on every later call.
 - **Lineage:** where a piece of work went after it was produced.
+- **Control:** a case where the right answer is known in advance (here, "not used"), mixed in to catch a method that says yes too easily.
+- **Blind:** the judge doesn't see the answer it is being compared with.
