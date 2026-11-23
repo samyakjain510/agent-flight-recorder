@@ -61,7 +61,17 @@ Three known answers is a thin test, so I checked it against a model.
 
 Neither side is ground truth, so I checked Haiku's evidence without reading it. For each case, the script takes the names, numbers and longer words Haiku cites, keeps the ones found in both the report and the lead's later work, and asks whether the lead already had them before the report arrived. When both methods say "used", 1 to 7 cited items are new. In 4 of the 5 "no trace found" cases, every item Haiku cites was already in the lead's earlier work. Haiku was crediting the report with things the lead already knew, even though the prompt told it not to. Four of those five are from one session where 8 helpers did similar jobs in parallel, so the lead had already seen the same content from a sibling.
 
-Haiku's confidence lines up with this. All 6 of its confidence-5 verdicts have at least one new item. Its confidence-3 verdicts have at most one.
+Haiku's confidence lined up with this in the first round: all 6 of its confidence-5 verdicts had at least one new item, and its confidence-3 verdicts had at most one.
+
+### Second round (Phase 4)
+
+After fixing the reader (it had been dropping reports from background subagents), 12 more reports existed. I ran them and 6 new controls, named after their pairs so they can't drift. Across all 30 reports and 12 controls:
+
+- Where text matching says "used", Haiku agreed in 15 of 15.
+- Haiku said "not used" on all 12 mismatched controls. Text matching gave a weak "unclear" on 3 of them.
+- Where text matching found no trace in the report (8), Haiku said used in all 8. In 7, nothing Haiku cited was new to the lead: 5 were things the lead already had, at confidence 4 or below, and 2 were "recommendation followed", where the lead did what the report advised in its own words. Text can't show that kind of use.
+- The confidence pattern from round 1 broke: 3 confidence-5 verdicts had no new items, all of them "recommendation followed". Confidence is a hint, not a test.
+- By cost the two methods barely differ: 96% of subagent spend reached the lead by text matching plus files, 100% by Haiku. They disagree only on $1.07 of $25.90.
 
 What changed in the tool:
 

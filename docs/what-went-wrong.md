@@ -57,3 +57,5 @@ A running log of mistakes, wrong guesses and surprises, and what changed because
 **Messages from me were counted twice in forks.** A fork copies earlier messages. Change: each message is counted once by its time (170 became 158).
 
 **The delegation estimate leaned on one assumption.** Most of the estimated saving came from the lead carrying the subagent's reading for its remaining calls, which assumes nothing is compacted or cleared. Change: it is reported as a range, from "kept" to "dropped right away".
+
+**I read too much into Haiku's confidence.** After round 1, Haiku's confidence-5 verdicts always came with new items, and I wrote that confidence lined up with evidence. Round 2 had three confidence-5 verdicts with no new items, all cases of the lead following a recommendation in its own words. Change: the lesson now treats confidence as a hint, and the report names the kind of use text matching can't see.

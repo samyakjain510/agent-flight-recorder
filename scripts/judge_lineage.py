@@ -258,14 +258,16 @@ def cited_new_items(case: Case, rec: dict) -> Tuple[int, int]:
     return len(both), len(both - {i for i in both if i in known})
 
 
-def report(cases: List[Case]) -> None:
+def report(cases: List[Case], json_out: Optional[str] = None) -> None:
     by_id = {c.id: c for c in cases}
     res = load_results()
+    summary: dict = {"judged": 0, "cases": len(cases), "groups": {}, "rows": []}
     rows = [res[c.id] for c in cases if c.id in res]
     for r in rows:
         r["ours_window"] = r["ours_window"].replace("some trace", "unclear")
         r["ours_full"] = r["ours_full"].replace("some trace", "unclear")
     print(f"{len(rows)} of {len(cases)} cases judged\n")
+    summary["judged"] = len(rows)
     for kind in ("real", "control"):
         g = [r for r in rows if r["kind"] == kind]
         if not g:
@@ -276,6 +278,15 @@ def report(cases: List[Case]) -> None:
             agree2 = sum((OURS.get(r[col]) != "not used") == (r["haiku"] != "not used") for r in g)
             print(f"  flightrec ({col.split('_')[1]}) vs Haiku: exact {agree3}/{len(g)},"
                   f" used-at-all {agree2}/{len(g)}")
+        summary["groups"][kind] = {
+            "n": len(g),
+            "exact": sum(OURS.get(r["ours_window"]) == r["haiku"] for r in g),
+            "used_at_all": sum((OURS.get(r["ours_window"]) != "not used") == (r["haiku"] != "not used") for r in g),
+            "haiku_not_used": sum(r["haiku"] == "not used" for r in g),
+            "ours_no_trace": sum(r["ours_window"] == "no trace found" for r in g),
+            "matrix": {f"{o} -> {h}": n for (o, h), n in sorted(Counter((r["ours_window"], r["haiku"]) for r in g).items())},
+            "confidence": dict(sorted(Counter(r["confidence"] for r in g).items())),
+        }
         m = Counter((r["ours_window"], r["haiku"]) for r in g)
         print("  flightrec (window) -> Haiku:")
         for (o, h), n in sorted(m.items()):
@@ -291,6 +302,9 @@ def report(cases: List[Case]) -> None:
         if r["kind"] != "real":
             continue
         both, new = cited_new_items(by_id[r["id"]], r)
+        summary["rows"].append({"id": r["id"], "ours": r["ours_window"], "haiku": r["haiku"],
+                                "confidence": r["confidence"], "evidence_kind": r["evidence_kind"],
+                                "cited": both, "new": new})
         flag = "" if OURS.get(r["ours_window"]) == r["haiku"] else "  <- disagree"
         print(f"  {r['id']:20} flightrec {r['ours_window']:15} Haiku {r['haiku']:9} ({r['confidence']},"
               f" {r['evidence_kind']:23}) cited {both:2} new {new:2}{flag}")
@@ -298,6 +312,20 @@ def report(cases: List[Case]) -> None:
                + (r.get("usage") or {}).get("cache_read_input_tokens", 0) for r in rows)
     print(f"\nHaiku input tokens {toks:,} · API-equivalent ${sum(r.get('cost_usd') or 0 for r in rows):.3f}"
           f" · {sum(r.get('seconds') or 0 for r in rows):.0f}s total")
+    # Controls from earlier rounds, kept under their old ids (their pairs came from an older case list).
+    old_controls = [r for k, r in res.items() if k.startswith("round1-control-")]
+    if old_controls:
+        print(f"earlier-round controls: {len(old_controls)}, Haiku said not used in"
+              f" {sum(r['haiku'] == 'not used' for r in old_controls)}, flightrec said no trace in"
+              f" {sum(r['ours_window'] == 'no trace found' for r in old_controls)}")
+    summary["earlier_controls"] = {"n": len(old_controls),
+                                   "haiku_not_used": sum(r["haiku"] == "not used" for r in old_controls),
+                                   "ours_no_trace": sum(r["ours_window"] == "no trace found" for r in old_controls)}
+    summary.update({"input_tokens": toks, "cost_usd": round(sum(r.get("cost_usd") or 0 for r in rows), 3),
+                    "seconds": round(sum(r.get("seconds") or 0 for r in rows))})
+    if json_out:
+        with open(json_out, "w") as f:
+            json.dump(summary, f, indent=1)
 
 
 def main() -> int:
@@ -307,6 +335,7 @@ def main() -> int:
     ap.add_argument("--report", action="store_true", help="compare saved results; call nothing")
     ap.add_argument("--pause", type=float, default=3.0, help="seconds between calls")
     ap.add_argument("--limit", type=int, help="judge at most this many new cases")
+    ap.add_argument("--json", help="with --report: also save the comparison to this file")
     args = ap.parse_args()
     cases = build_cases(args.root)
     if args.dry_run:
@@ -317,7 +346,7 @@ def main() -> int:
               f" = {len(cases)} calls · {sum(len(prompt_for(c)) for c in cases):,} chars in all")
         return 0
     if args.report:
-        report(cases)
+        report(cases, args.json)
         return 0
     run_all(cases, args.pause, args.limit)
     report(cases)

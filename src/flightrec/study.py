@@ -331,11 +331,15 @@ def waste_section(ds: Dataset) -> dict:
     lin_cost: Dict[str, float] = defaultdict(float)
     lin_n: Counter = Counter()
     conflicts = set()
+    subagent_rows = []
     for run in ds.runs:
         for ln in az.lineage(run):
             if (run.session_id, ln.agent.id) in keep:
+                cost = sum(request_cost(r) or 0.0 for r in ln.agent.requests)
                 lin_n[ln.status] += 1
-                lin_cost[ln.status] += sum(request_cost(r) or 0.0 for r in ln.agent.requests)
+                lin_cost[ln.status] += cost
+                subagent_rows.append({"id": f"{run.session_id[:8]}-{ln.agent.id[:8]}", "cost": round(cost, 4),
+                                      "status": ln.status, "report_status": ln.report_status})
         for c in az.file_conflicts(run):
             conflicts.add((c.path, c.kind, tuple(c.agents)))
     sub_cost = sum(lin_cost.values())
@@ -355,6 +359,7 @@ def waste_section(ds: Dataset) -> dict:
         "lineage_count": dict(lin_n.most_common()),
         "lineage_cost": {k: round(v, 2) for k, v in sorted(lin_cost.items(), key=lambda kv: -kv[1])},
         "lineage_cost_pct": {k: _pct(v, sub_cost) for k, v in sorted(lin_cost.items(), key=lambda kv: -kv[1])},
+        "subagents": subagent_rows,
         "conflicts_several_writers": sum(1 for c in conflicts if c[1] == "several writers"),
         "conflicts_stale_writes": sum(1 for c in conflicts if c[1] == "stale write"),
     }
