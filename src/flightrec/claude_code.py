@@ -45,12 +45,16 @@ Other records
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 from datetime import datetime
 from typing import Dict, List, Optional, Tuple
 
-from .model import Agent, Approval, Request, Run, ToolCall, Usage
+from .model import Agent, Approval, Event, Request, Run, ToolCall, Usage
+
+# Tool-input fields that carry text the agent wrote (used to trace where reports went).
+WRITTEN_FIELDS = ("content", "new_string", "command", "prompt", "query", "url", "description")
 
 SPAWN_TOOLS = ("Agent", "Task")
 SYNTHETIC_MODEL = "<synthetic>"
@@ -148,6 +152,7 @@ def usage_of(message: dict) -> Usage:
     u = message.get("usage") or {}
     server = u.get("server_tool_use") or {}
     details = u.get("output_tokens_details") or {}
+    creation = u.get("cache_creation") or {}
     return Usage(
         input=u.get("input_tokens") or 0,
         cache_write=u.get("cache_creation_input_tokens") or 0,
@@ -156,7 +161,24 @@ def usage_of(message: dict) -> Usage:
         thinking=details.get("thinking_tokens") or 0,
         web_searches=server.get("web_search_requests") or 0,
         web_fetches=server.get("web_fetch_requests") or 0,
+        cache_write_1h=creation.get("ephemeral_1h_input_tokens") or 0,
     )
+
+
+def text_of(content) -> str:
+    """The readable text in a message or tool-result content."""
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts = []
+        for b in content:
+            if isinstance(b, dict):
+                if b.get("type") == "text":
+                    parts.append(b.get("text") or "")
+                elif "content" in b:
+                    parts.append(text_of(b.get("content")))
+        return "\n".join(p for p in parts if p)
+    return ""
 
 
 def text_len(content) -> int:
@@ -175,11 +197,15 @@ def text_len(content) -> int:
     return 0
 
 
+def fingerprint(text: str) -> str:
+    return hashlib.sha1(text.encode("utf-8", errors="replace")).hexdigest()[:16]
+
+
 class _Links:
     """Facts gathered while reading, joined up after every file is read."""
 
     def __init__(self) -> None:
-        self.spawn_results: Dict[str, Tuple[ToolCall, dict, Optional[datetime]]] = {}
+        self.spawn_results: Dict[str, Tuple[ToolCall, dict, Optional[datetime], str]] = {}
         self.deliveries: List[Tuple[dict, Optional[datetime]]] = []
 
 
@@ -208,29 +234,41 @@ def _read_agent(records: List[dict], agent: Agent, run: Run, links: _Links) -> N
             if rid not in groups:
                 groups[rid] = []
                 order.append(rid)
+                agent.events.append(Event("call", ts, rid))
             groups[rid].append((r, ts))
             for b in msg.get("content") or []:
-                if isinstance(b, dict) and b.get("type") == "tool_use" and b.get("id") not in calls:
+                if not isinstance(b, dict):
+                    continue
+                if b.get("type") == "text" and b.get("text"):
+                    agent.outputs.append((ts, b["text"]))
+                if b.get("type") == "tool_use" and b.get("id") not in calls:
+                    inp = b.get("input") if isinstance(b.get("input"), dict) else {}
                     calls[b["id"]] = ToolCall(
                         id=b["id"],
                         agent_id=agent.id,
                         request_id=rid,
                         name=b.get("name") or "?",
-                        input=b.get("input") if isinstance(b.get("input"), dict) else {},
+                        input=inp,
                         started=ts,
                     )
+                    written = "\n".join(str(inp[k]) for k in WRITTEN_FIELDS if isinstance(inp.get(k), str))
+                    if written:
+                        agent.outputs.append((ts, written))
 
         elif rtype == "user":
             agent.seen(ts)
             _read_user_line(r, ts, agent, run, calls, links)
 
-        elif rtype == "attachment" and is_lead:
+        elif rtype == "attachment":
             origin = (r.get("attachment") or {}).get("origin")
-            if isinstance(origin, dict):
+            size = -1
+            if isinstance(origin, dict) and is_lead:
                 if origin.get("kind") == "peer":
                     links.deliveries.append((origin, ts))
+                    size = len(str(origin.get("handbackReportText") or origin.get("body") or ""))
                 elif origin.get("kind") == "human":
                     run.human_messages.append(ts)
+            agent.events.append(Event("context", ts, None, size))
 
         elif rtype == "system" and is_lead and r.get("subtype") == "compact_boundary":
             run.compactions.append(ts)
@@ -263,6 +301,7 @@ def _read_agent(records: List[dict], agent: Agent, run: Run, links: _Links) -> N
                 usage=usage,
                 stop_reason=last.get("stop_reason"),
                 tool_use_ids=tool_ids,
+                speed=(last.get("usage") or {}).get("speed"),
             )
         )
     agent.tool_calls = list(calls.values())
@@ -280,11 +319,22 @@ def _read_user_line(r: dict, ts, agent: Agent, run: Run, calls: Dict[str, ToolCa
         result_meta = r.get("toolUseResult")
         for b in results:
             call = calls.get(b.get("tool_use_id"))
+            body = text_of(b.get("content"))
+            agent.events.append(Event("result", ts, b.get("tool_use_id"), len(body)))
             if call is None:
                 continue  # a result whose call we never saw, e.g. history copied without it
             call.finished = ts
             call.is_error = bool(b.get("is_error"))
-            call.result_chars = text_len(b.get("content"))
+            call.result_chars = len(body)
+            raw = b.get("content")
+            call.result_media = isinstance(raw, list) and any(
+                isinstance(x, dict) and x.get("type") in ("image", "document") for x in raw)
+            if call.result_media:
+                call.result_hash = fingerprint(json.dumps(raw, sort_keys=True, default=str))
+            elif body:
+                call.result_hash = fingerprint(body)
+            else:
+                call.result_hash = None  # empty result: nothing to compare
             if isinstance(decision, dict) and decision.get("decision"):
                 call.approval = Approval(
                     tool_use_id=call.id,
@@ -294,9 +344,10 @@ def _read_user_line(r: dict, ts, agent: Agent, run: Run, calls: Dict[str, ToolCa
                     at=ts,
                 )
             if call.name in SPAWN_TOOLS and isinstance(result_meta, dict) and result_meta.get("agentId"):
-                links.spawn_results[str(result_meta["agentId"])] = (call, result_meta, ts)
+                links.spawn_results[str(result_meta["agentId"])] = (call, result_meta, ts, body)
         return
 
+    agent.events.append(Event("context", ts, None, text_len(content)))
     if agent.id != "main" or r.get("isMeta"):
         return
     origin = r.get("origin")
@@ -362,7 +413,7 @@ def _link(run: Run, links: _Links) -> None:
             agent.background = bool(call.input.get("run_in_background"))
 
     # 2. Spawn results: background vs synchronous, reports, and subagents with no transcript.
-    for agent_id, (call, meta, ts) in links.spawn_results.items():
+    for agent_id, (call, meta, ts, body) in links.spawn_results.items():
         agent = run.agents.get(agent_id)
         if agent is None:
             agent = Agent(
@@ -386,7 +437,8 @@ def _link(run: Run, links: _Links) -> None:
                 agent.background = False
             if agent.report_at is None:
                 agent.report_at = ts
-                agent.report_chars = call.result_chars
+                agent.report_chars = len(body)
+                agent.report_text = body
 
     # 3. Background reports delivered later as "peer" messages.
     for origin, ts in links.deliveries:
@@ -394,6 +446,7 @@ def _link(run: Run, links: _Links) -> None:
         for agent in run.subagents:
             if sender and (sender == agent.id or agent.id in sender):
                 if agent.report_at is None or (ts is not None and ts < agent.report_at):
+                    agent.report_text = str(origin.get("handbackReportText") or origin.get("body") or "")
                     agent.report_at = ts
-                    agent.report_chars = len(str(origin.get("handbackReportText") or origin.get("body") or ""))
+                    agent.report_chars = len(agent.report_text)
                 break

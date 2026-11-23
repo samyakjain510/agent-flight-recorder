@@ -187,6 +187,24 @@ class ReaderTests(unittest.TestCase):
         self.assertEqual(run.unknown_record_types["brand-new-record-type"], 1)
         self.assertEqual(run.bad_lines, 1)
 
+    def test_fingerprints_cover_images_and_skip_empty_results(self):
+        def image_result(tid, data, when):
+            rec = tool_result(tid, when)
+            rec["message"]["content"][0]["content"] = [{"type": "image", "source": {"type": "base64", "data": data}}]
+            return rec
+        path = self.fake.write_session("img", [
+            assistant("r1", OPUS, usage(), [tool_use("i1", "Read", file_path="/a.png"),
+                                            tool_use("i2", "Read", file_path="/b.png"),
+                                            tool_use("i3", "Read", file_path="/empty.txt")], ts(1)),
+            image_result("i1", "AAAA", ts(2)),
+            image_result("i2", "BBBB", ts(3)),
+            tool_result("i3", ts(4), ""),
+        ])
+        calls = {c.id: c for c in parse_session(path).lead.tool_calls}
+        self.assertTrue(calls["i1"].result_media)
+        self.assertNotEqual(calls["i1"].result_hash, calls["i2"].result_hash)  # different pictures, different prints
+        self.assertIsNone(calls["i3"].result_hash)
+
     def test_helpers(self):
         self.assertEqual(parse_ts("2026-11-01T10:00:00.000Z").utcoffset().total_seconds(), 0)
         self.assertIsNone(parse_ts("not a time"))

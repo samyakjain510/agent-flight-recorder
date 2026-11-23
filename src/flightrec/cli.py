@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import argparse
+import statistics
 import sys
 from collections import Counter
 from typing import List, Optional
 
 from . import __version__, fmt
+from . import analyze as az
 from .check import FIELDS, check_run
 from .claude_code import default_root, find_sessions, parse_session, session_id_of, subagent_files
 from .corpus import mark_shared, request_index
@@ -184,6 +186,182 @@ def cmd_check(args) -> int:
     return 0
 
 
+# ---------------------------------------------------------------- analyze
+
+def _target_label(t: str, redact: bool, limit: int = 60) -> str:
+    kind, _, rest = t.partition(" ")
+    if redact:
+        if kind == "file":
+            ext = rest.split(" ")[0].rsplit(".", 1)[-1] if "." in rest.split(" ")[0] else "?"
+            return f"file (.{ext})"
+        return kind
+    return fmt.text(t, False, limit)
+
+
+def _money(x: float) -> str:
+    return f"${x:,.2f}" if x >= 0.995 else f"${x:.3f}"
+
+
+def _agent_label(agent, redact: bool) -> str:
+    if agent.id == "main":
+        return "lead"
+    return f"{agent.kind} \"{fmt.text(agent.description, redact, 30)}\""
+
+
+def _analysis(run: Run, scale, only_owned: bool = False) -> dict:
+    from . import analyze as az
+    from .pricing import request_cost
+
+    owned_ids = {r.id for r in run.requests() if r.owned or not only_owned}
+    reqs = [r for r in run.requests() if r.id in owned_ids]
+    costs = [request_cost(r) for r in reqs]
+    by_agent_cost = Counter()
+    for r, c in zip(reqs, costs):
+        by_agent_cost["lead" if r.agent_id == "main" else "sub"] += c or 0.0
+    return {
+        "run": run,
+        "cost": sum(c or 0.0 for c in costs),
+        "cost_unknown": sum(1 for c in costs if c is None),
+        "lead_cost": by_agent_cost["lead"],
+        "sub_cost": by_agent_cost["sub"],
+        "startup": [s for s in az.startup_costs(run) if not only_owned or all(r.id in owned_ids for r in s.agent.requests)],
+        "repeats": [x for x in az.find_repeats(run, scale) if x.call.request_id in owned_ids],
+        "lineage": az.lineage(run),
+        "conflicts": az.file_conflicts(run),
+        "approvals": az.approvals(run),
+        "peak": az.peak_parallel(run),
+    }
+
+
+def cmd_analyze(args) -> int:
+    from . import analyze as az
+
+    corpus = request_index(args.root)
+    paths = _pick_sessions(args.root, False) if args.all else [_find_one(args.root, args.session)]
+    runs = []
+    for p in paths:
+        run = parse_session(p)
+        mark_shared(run, corpus)
+        runs.append(run)
+    scale = az.calibrate(parse_session(p) for p in find_sessions(args.root))
+    if args.all:
+        return _analyze_all(runs, scale, args)
+    return _analyze_one(runs[0], scale, args)
+
+
+def _analyze_one(run: Run, scale, args) -> int:
+    a = _analysis(run, scale)
+    print(f"Session {run.session_id[:8]}  {fmt.text(run.title or '', args.redact, 50)}")
+    print(f"  {len(run.agents)} agents · {len(run.requests())} model calls · API-equivalent cost {_money(a['cost'])}"
+          f" (lead {_money(a['lead_cost'])}, subagents {_money(a['sub_cost'])})"
+          + (f" · {a['cost_unknown']} calls on models with no known price" if a["cost_unknown"] else ""))
+    shared = sum(1 for r in run.requests() if not r.owned)
+    if shared:
+        print(f"  {shared} of these calls are copies of history from an older file")
+    print(f"  token sizes measured from {scale.samples} steps: about {scale.overall:.1f} characters per token"
+          f" (Read {scale.ratio('Read'):.1f}, Bash {scale.ratio('Bash'):.1f})")
+
+    print("\nStartup cost: the context each agent starts with, re-read on every call")
+    for s in a["startup"]:
+        print(f"  {_agent_label(s.agent, args.redact):42} first input {fmt.tokens(s.first_input):>6} · {s.calls:3} calls"
+              f" · {s.token_share * 100:4.0f}% of its input tokens · {s.cost_share * 100:4.0f}% of its cost")
+
+    reps = a["repeats"]
+    print("\nRepeated work (same target, identical result)")
+    for within, label in ((True, "inside one agent (it already had this)"), (False, "across agents (another agent had it)")):
+        group = [x for x in reps if x.within_agent == within]
+        if group:
+            print(f"  {label}: {len(group)} repeats · {fmt.tokens(sum(x.tokens for x in group))} tokens added again"
+                  f" · up to {fmt.tokens(sum(x.carried_tokens for x in group))} carried · up to {_money(sum(x.cost for x in group))}")
+        else:
+            print(f"  {label}: none")
+    top = Counter()
+    for x in reps:
+        top[az.target(x.call) or "?"] += 1
+    for t, n in top.most_common(5):
+        print(f"    {n}× {_target_label(t, args.redact)}")
+
+    print("\nDid subagent reports reach the parent's later work? (text matching; paraphrase is missed)")
+    for ln in a["lineage"]:
+        parts = [f"report: {ln.report_status}"]
+        if ln.report_status in ("used", "some trace", "no trace found"):
+            parts[0] += f" ({ln.items_reused}/{ln.items_total} items, {ln.phrase_overlap * 100:.0f}% phrases)"
+        if ln.files_written:
+            parts.append(f"files: {ln.files_written} written, {ln.files_picked_up} picked up, "
+                         f"{ln.files_revised} revised, {ln.files_replaced} replaced")
+        print(f"  {_agent_label(ln.agent, args.redact):42} {ln.status.upper():26} " + " · ".join(parts))
+    if not a["lineage"]:
+        print("  no subagents")
+
+    print("\nFiles written by more than one agent")
+    if a["conflicts"]:
+        for c in a["conflicts"]:
+            print(f"  {c.kind}: {_target_label('file ' + c.path, args.redact)} by {', '.join(x[:8] for x in c.agents)}")
+    else:
+        print("  none")
+
+    ap = a["approvals"]
+    print("\nApprovals")
+    if ap.total:
+        print(f"  {ap.total} decisions · " + ", ".join(f"{k} {v}" for k, v in ap.by_source.most_common())
+              + (f" · {ap.rejected} rejected" if ap.rejected else ""))
+        waits = [s for _, s in ap.human if s is not None]
+        if waits:
+            print(f"  by a person: {len(waits)} · median {statistics.median(waits):.0f}s from the call to its result"
+                  f" (includes running time)")
+        risky = ap.quick_risky()
+        if risky:
+            print(f"  risky commands a person allowed in under 3s: {len(risky)}")
+    else:
+        print("  none recorded")
+    if run.subagents:
+        print(f"\nAt most {a['peak']} subagents were running at the same time.")
+    print("\nCarried costs assume content stays in context until the agent stops, so they are upper bounds.")
+    return 0
+
+
+def _analyze_all(runs: List[Run], scale, args) -> int:
+    rows = [_analysis(r, scale, only_owned=True) for r in runs]
+    rows.sort(key=lambda a: a["run"].started.timestamp() if a["run"].started else 0)
+    print(f"{'session':9} {'subs':>4} {'cost':>9} {'sub cost':>9} {'repeats in/x':>12} {'repeat cost':>11}"
+          f" {'used/trace/none/late':>20} {'people ok':>9}")
+    for a in rows:
+        run = a["run"]
+        ln = Counter(x.status for x in a["lineage"])
+        reps = a["repeats"]
+        print(f"{run.session_id[:8]:9} {len(run.subagents):>4} {_money(a['cost']):>9} {_money(a['sub_cost']):>9}"
+              f" {sum(x.within_agent for x in reps):>5}/{sum(not x.within_agent for x in reps):<6}"
+              f" {_money(sum(x.cost for x in reps)):>11}"
+              f" {ln['used']:>5}/{ln['some trace']}/{ln['no trace found']}/{ln['arrived after parent stopped']:<6}"
+              f" {len(a['approvals'].human):>9}")
+
+    total = sum(a["cost"] for a in rows)
+    sub_total = sum(a["sub_cost"] for a in rows)
+    subs = [s for a in rows for s in a["startup"] if s.agent.id != "main"]
+    reps = [x for a in rows for x in a["repeats"]]
+    lin = Counter(x.status for a in rows for x in a["lineage"])
+    print(f"\nAcross {len(rows)} multi-agent sessions (copied history counted once):")
+    print(f"  API-equivalent cost {_money(total)}; subagents {_money(sub_total)} ({sub_total / total * 100:.0f}%)" if total else "")
+    if subs:
+        firsts = sorted(s.first_input for s in subs)
+        carried = sum(s.carried_cost for s in subs)
+        sub_cost = sum(s.total_cost for s in subs)
+        print(f"  startup: {len(subs)} subagents with transcripts · median first input {fmt.tokens(int(statistics.median(firsts)))} tokens"
+              f" · base context = {carried / sub_cost * 100:.0f}% of subagent cost" if sub_cost else "")
+    for within, label in ((True, "repeats inside one agent"), (False, "repeats across agents")):
+        g = [x for x in reps if x.within_agent == within]
+        by_tool = Counter(x.call.name for x in g)
+        print(f"  {label}: {len(g)} · {fmt.tokens(sum(x.tokens for x in g))} tokens added again · up to"
+              f" {_money(sum(x.cost for x in g))} ({sum(x.cost for x in g) / total * 100:.1f}% of cost)"
+              + (" · " + ", ".join(f"{k} {v}" for k, v in by_tool.most_common(4)) if g else ""))
+    print("  subagent reports: " + ", ".join(f"{k} {v}" for k, v in lin.most_common()))
+    print(f"  files written by several agents: {sum(1 for a in rows for c in a['conflicts'] if c.kind == 'several writers')}"
+          f" · stale writes: {sum(1 for a in rows for c in a['conflicts'] if c.kind == 'stale write')}")
+    print(f"  approvals by a person: {sum(len(a['approvals'].human) for a in rows)}"
+          f" of {sum(a['approvals'].total for a in rows)} decisions")
+    return 0
+
+
 # ---------------------------------------------------------------- main
 
 def main(argv: Optional[List[str]] = None) -> int:
@@ -204,6 +382,11 @@ def main(argv: Optional[List[str]] = None) -> int:
     s.add_argument("session", help="session id, or its first few characters")
     s.add_argument("--instructions", action="store_true", help="print each subagent's full instructions")
     s.set_defaults(func=cmd_show)
+
+    s = sub.add_parser("analyze", help="findings for one run: startup cost, repeated work, lineage, conflicts, approvals")
+    s.add_argument("session", nargs="?", help="session id, or its first few characters")
+    s.add_argument("--all", action="store_true", help="summarize every session that used subagents")
+    s.set_defaults(func=cmd_analyze)
 
     s = sub.add_parser("check", help="compare our token counts with Claude Code's own totals")
     s.add_argument("--all", action="store_true", help="check every session, not only those with subagents")

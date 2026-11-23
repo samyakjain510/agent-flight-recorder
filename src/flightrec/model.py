@@ -31,6 +31,7 @@ class Usage:
     thinking: int = 0
     web_searches: int = 0
     web_fetches: int = 0
+    cache_write_1h: int = 0  # the part of cache_write kept for 1 hour (priced higher than 5-minute writes)
 
     def add(self, other: "Usage") -> "Usage":
         for f in fields(self):
@@ -82,6 +83,8 @@ class ToolCall:
     finished: Optional[datetime] = None
     is_error: bool = False
     result_chars: int = 0
+    result_hash: Optional[str] = None  # fingerprint of the whole result: equal hashes = identical results
+    result_media: bool = False  # the result holds images or documents, whose token size we can't measure
     approval: Optional[Approval] = None
     spawned_agent_id: Optional[str] = None
 
@@ -99,6 +102,24 @@ class Request:
     stop_reason: Optional[str] = None
     tool_use_ids: List[str] = field(default_factory=list)
     shared_with: Set[str] = field(default_factory=set)  # other session files holding the same call
+    owned: bool = True  # False when another file holds the original of this (copied) call
+    speed: Optional[str] = None  # "fast" when fast mode was used (priced higher)
+
+
+@dataclass
+class Event:
+    """One step in an agent's timeline, in file order.
+
+    kind: "call"    a model call (ref = request id)
+          "result"  a tool result came back (ref = tool call id, chars = its size)
+          "context" anything else added to the conversation: a message, a
+                    report from a subagent, a reminder (chars = size, -1 if unknown)
+    """
+
+    kind: str
+    at: Optional[datetime]
+    ref: Optional[str] = None
+    chars: int = 0
 
 
 @dataclass
@@ -120,6 +141,9 @@ class Agent:
     ended: Optional[datetime] = None
     report_at: Optional[datetime] = None  # when its final report reached the parent
     report_chars: int = 0
+    report_text: str = ""  # kept in memory for lineage; never printed unless asked
+    outputs: List[Tuple[Optional[datetime], str]] = field(default_factory=list)  # what this agent wrote
+    events: List[Event] = field(default_factory=list)
 
     def usage(self) -> Usage:
         total = Usage()

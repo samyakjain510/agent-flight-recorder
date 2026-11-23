@@ -1,10 +1,10 @@
 # flightrec
 
-A local flight recorder for multi-agent Claude Code runs. It reads the transcripts Claude Code already writes on your machine and shows the tree of lead agent and subagents, the instructions each one got, and tokens and time per branch. Analysis of duplicated work, lineage and approvals is in progress.
+A local flight recorder for multi-agent Claude Code runs. It reads the transcripts Claude Code already writes on your machine and shows the tree of lead agent and subagents, the instructions each one got, tokens, time and API-equivalent cost per branch, and then what was repeated, what each subagent's startup cost, whether its work was used, and who approved what.
 
 Nothing leaves your machine. There are no network calls and no dependencies beyond Python 3.9+.
 
-**Status:** Phase 1 of 5 (the reader). Private while in progress.
+**Status:** Phase 2 of 5 (reader and analyzers). Private while in progress.
 
 ## Try it
 
@@ -13,6 +13,8 @@ git clone <this repo> && cd agent-flight-recorder
 python3 -m pip install -e .        # or skip installing and use: PYTHONPATH=src python3 -m flightrec
 flightrec list                     # sessions that used subagents
 flightrec show <session-id-prefix> # the tree, with tokens and time per branch
+flightrec analyze <session-id-prefix>  # startup cost, repeated work, lineage, conflicts, approvals
+flightrec analyze --all            # the same, summarized across every multi-agent session
 flightrec check --all              # compare token counts with Claude Code's own totals
 ```
 
