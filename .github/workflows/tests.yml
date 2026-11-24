@@ -1,0 +1,28 @@
+name: tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.9", "3.11", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Unit tests
+        run: python -m unittest discover -s tests -v
+      - name: Install and run on the demo transcripts
+        run: |
+          python -m pip install .
+          flightrec --version
+          flightrec --root examples/demo-run/projects list
+          flightrec --root examples/demo-run/projects analyze --all
+          flightrec --root examples/demo-run/projects study
+          flightrec --root examples/demo-run/projects view --all --out /tmp/pages
+          test -s /tmp/pages/index.html

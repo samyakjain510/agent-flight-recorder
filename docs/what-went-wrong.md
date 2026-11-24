@@ -59,3 +59,11 @@ A running log of mistakes, wrong guesses and surprises, and what changed because
 **The delegation estimate leaned on one assumption.** Most of the estimated saving came from the lead carrying the subagent's reading for its remaining calls, which assumes nothing is compacted or cleared. Change: it is reported as a range, from "kept" to "dropped right away".
 
 **I read too much into Haiku's confidence.** After round 1, Haiku's confidence-5 verdicts always came with new items, and I wrote that confidence lined up with evidence. Round 2 had three confidence-5 verdicts with no new items, all cases of the lead following a recommendation in its own words. Change: the lesson now treats confidence as a hint, and the report names the kind of use text matching can't see.
+
+## Phase 5 (Nov 24, 2026)
+
+**Claude Code changed how background reports arrive, again.** The demo run used Claude Code 2.1.330, where a finished background subagent's report comes as a "task-notification" message with the report inside tags. flightrec showed all three demo helpers as never reporting, the same symptom as the Phase 4 bug in a new shape. Change: the reader parses task notifications, with a test that also checks a shell task's notification isn't mistaken for a report. My own 11 study sessions don't use this shape, so the study's numbers didn't change.
+
+**Transcripts carry more personal data than paths.** The first scrub of the demo replaced my home folder and user name and still failed its own check: Claude Code writes my email address into every transcript as context for the model, and records also hold account and organization ids, machine details and snapshots of its system prompt. Change: the scrub keeps only the records and attachments flightrec reads, removes account ids, replaces every email address, and refuses to finish if anything on its watch list remains.
+
+**The write-up's numbers drifted while I wrote it.** The session I built this in is one of the 11 I measured, so its counts keep growing. My first draft took three numbers from an earlier run than the saved study. Change: the write-up is dated, and a script checks every number in it against the saved study output.

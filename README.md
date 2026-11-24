@@ -1,47 +1,79 @@
 # flightrec
 
-A local flight recorder for multi-agent Claude Code runs. It reads the transcripts Claude Code already writes on your machine and shows the tree of lead agent and subagents, the instructions each one got, tokens, time and API-equivalent cost per branch, and then what was repeated, what each subagent's startup cost, whether its work was used, and who approved what. Each run can be opened as a single offline HTML page with a lane per agent and a replay.
+A local flight recorder for multi-agent Claude Code runs. It reads the transcripts Claude Code already writes on your machine and shows the lead agent and its subagents: what each was told, what each cost in tokens, time and API-equivalent dollars, what was repeated, whether each subagent's work was used, and who approved what. Any run opens as a single offline HTML page with a lane per agent and a replay.
 
-Nothing leaves your machine. There are no network calls and no dependencies beyond Python 3.9+.
+[![A flightrec page: one lane per agent, reports flowing back to the lead, findings pinned on the timeline](docs/demo/screenshot.jpg)](https://samyakjain510.github.io/agent-flight-recorder/demo/)
 
-**Status:** Phase 4 of 5 (reader, analyzers, viewer, study). Private while in progress.
+[Open the demo page](https://samyakjain510.github.io/agent-flight-recorder/demo/) (a lead and three Haiku helpers reviewing this repository) · [Read the write-up](docs/write-up.md) (what it found on my own runs)
 
-## Try it
+Nothing leaves your machine. flightrec has no dependencies beyond Python 3.9+ and makes no network calls.
+
+## Install
 
 ```bash
-git clone <this repo> && cd agent-flight-recorder
-python3 -m pip install -e .        # or skip installing and use: PYTHONPATH=src python3 -m flightrec
+pipx install git+https://github.com/samyakjain510/agent-flight-recorder
+```
+
+Or `python3 -m pip install --user git+https://github.com/samyakjain510/agent-flight-recorder`. To run it without installing: clone the repository and use `PYTHONPATH=src python3 -m flightrec` in place of `flightrec`.
+
+## Use
+
+```bash
+flightrec view --all --open        # a page per multi-agent session, plus an index, opened in your browser
 flightrec list                     # sessions that used subagents
-flightrec show <session-id-prefix> # the tree, with tokens and time per branch
-flightrec analyze <session-id-prefix>  # startup cost, repeated work, lineage, conflicts, approvals
-flightrec analyze --all            # the same, summarized across every multi-agent session
+flightrec show <session>           # the agent tree, with tokens and time per branch
+flightrec analyze <session>        # startup cost, repeated work, where subagent work went, conflicts, approvals
+flightrec study                    # the same across every multi-agent session (add --json FILE to save the numbers)
 flightrec check --all              # compare token counts with Claude Code's own totals
-flightrec view <session-id-prefix> --open   # one offline HTML page: lanes, replay, findings
-flightrec view --all --open        # a page per multi-agent run, plus an index
-flightrec study --json study.json  # aggregate findings across every multi-agent run
 ```
 
-Add `--redact` before the command to replace every piece of transcript text (titles, instructions, reports, commands, paths) with its length, for example before sharing a page or a screenshot. Pages go to `./flightrec-view/` unless you pass `--out`.
+`<session>` is a session id or its first few characters. flightrec reads `~/.claude/projects` (or `$CLAUDE_CONFIG_DIR/projects`); point it elsewhere with `--root`. Put `--redact` before the command to replace every piece of transcript text (titles, instructions, reports, commands, paths) with its length, for example before sharing a screenshot. Pages go to `./flightrec-view/` unless you pass `--out`.
 
-## How we know the numbers are right
-
-`flightrec check` compares the reader's token counts with the running totals Claude Code keeps for each session. On my machine (Nov 23, 2026), across 42 sessions where a fair comparison is possible, the reader never counted more than Claude Code did, and matched it exactly in 17. The rest of the gap comes from calls Claude Code never writes to the transcript. See `docs/learn/01-reading-transcripts.md`.
-
-## Checking the lineage verdicts
-
-`scripts/judge_lineage.py` asks a model, through `claude -p` on your own Claude plan, whether each lead relied on each subagent report, without showing it flightrec's verdict, and mixes in mismatched pairs as controls. It is kept out of the package because it sends transcript excerpts to Anthropic; the package itself makes no network calls.
+To try it without your own transcripts, use the demo run in this repository:
 
 ```bash
-python3 scripts/judge_lineage.py --dry-run   # cases and sizes, no calls
-python3 scripts/judge_lineage.py             # one call at a time; resumes if stopped
-python3 scripts/judge_lineage.py --report    # compare
+flightrec --root examples/demo-run/projects view --all --open
 ```
 
-## Tests
+## What it found on my runs
+
+From 11 multi-agent sessions and 30 subagents on my Mac (October–November 2026). Details, method and limits are in the [write-up](docs/write-up.md).
+
+- A subagent starts with a median of 48k tokens of base context. For jobs of 1 to 5 model calls, carrying it was a median of 56% of the subagent's cost.
+- Delegating was still cheaper than the lead doing the same work in 27 of 30 cases (an estimate), because the lead's own context was larger still.
+- Parallel helpers overlapped: a median of 17% of a helper's distinctive findings also appeared in a sibling's report, against 0% for unrelated reports.
+- 96% to 100% of subagent spend went to work the lead used, depending on the method (text and file tracing, or a blind model judge).
+- Settings made all 1,766 permission decisions in those sessions.
+
+## How the numbers are checked
+
+- `flightrec check` compares token counts with the totals Claude Code keeps itself. On my machine, across 43 sessions where a fair comparison is possible, flightrec never counted more and matched exactly in 17. The gap in the rest is calls Claude Code doesn't write to the transcript.
+- Prices were worked out from Claude Code's own cost records: list prices reproduce them to the cent in 37 of 38 records.
+- Lineage verdicts were checked against a blind model judge with controls (`scripts/judge_lineage.py`). That script sits outside the package because it sends transcript excerpts to Anthropic through `claude -p`.
+- Unit tests run on every push, on Python 3.9, 3.11 and 3.13, along with every command on the demo transcripts.
+
+Claude Code's transcript format is internal and changes often (21 versions in three months of my data). Everything flightrec knows about it lives in `src/flightrec/claude_code.py`, and record types it doesn't recognize are reported.
+
+## Learn how it works
+
+I built this as a learning project and wrote a short lesson at each step:
+
+- [Lesson 0: the big picture](docs/learn/00-big-picture.md)
+- [Lesson 1: reading transcripts](docs/learn/01-reading-transcripts.md)
+- [Lesson 2: what a token costs, and where the work went](docs/learn/02-what-a-token-costs.md)
+- [Lesson 3: the viewer](docs/learn/03-the-viewer.md)
+- [Lesson 4: the study](docs/learn/04-the-study.md)
+- [What went wrong](docs/what-went-wrong.md), a running log of mistakes and what changed because of each
+
+## Development
 
 ```bash
 python3 -m unittest discover -s tests
 ```
+
+An editable install (`python3 -m pip install -e .`) needs pip 21.3 or newer.
+
+flightrec is an independent project and isn't affiliated with Anthropic.
 
 ## License
 

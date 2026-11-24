@@ -4,6 +4,8 @@ out/
 flightrec-view/
 *.jsonl
 !tests/**/*.jsonl
+# the public demo run, scrubbed with scripts/scrub_transcripts.py
+!examples/demo-run/**/*.jsonl
 
 # Python
 __pycache__/

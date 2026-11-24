@@ -1,0 +1,8 @@
+You are the lead reviewer for this repository, flightrec: a small Python tool that reads Claude Code transcripts and explains multi-agent runs.
+
+Start three helper subagents in parallel, all in one message, each with model "haiku":
+1. Package map: for each module in src/flightrec, say in one line what it does and which other modules it imports.
+2. Test gaps: list the public functions in src/flightrec/analyze.py and src/flightrec/view.py that no test in tests/ calls directly.
+3. Docs check: read docs/learn/*.md and list any statement about how the code works that the code in src/flightrec does not back up. Quote the statement and name the file and function you checked.
+
+Wait for all three reports. Then write REVIEW.md in the repository root: at most 300 words, the three most useful changes you would make, and for each one say which helper's finding it comes from. Do not edit or create any other file.

@@ -374,7 +374,9 @@ def cmd_view(args) -> int:
         run = parse_session(path)
         mark_shared(run, corpus)
         payload = view.build(run, scale, redact=args.redact)
-        name = run.session_id[:8] + ".html"
+        if args.title and not args.all:
+            payload["title"] = args.title
+        name = args.file if (args.file and not args.all) else run.session_id[:8] + ".html"
         with open(os.path.join(args.out, name), "w", encoding="utf-8") as f:
             f.write(view.render(payload))
         written.append(os.path.join(args.out, name))
@@ -497,6 +499,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     s.add_argument("--all", action="store_true", help="a page for every session that used subagents, plus an index")
     s.add_argument("--out", default="flightrec-view", help="folder for the pages (default: ./flightrec-view)")
     s.add_argument("--open", action="store_true", help="open the page in your browser")
+    s.add_argument("--title", help="title to show on the page (one session only)")
+    s.add_argument("--file", help="file name for the page (one session only), e.g. index.html")
     s.set_defaults(func=cmd_view)
 
     args = p.parse_args(argv)

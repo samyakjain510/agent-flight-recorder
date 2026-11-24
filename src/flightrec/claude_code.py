@@ -31,7 +31,9 @@ Subagents
   Its result carries toolUseResult.agentId. Synchronous subagents
   (status "completed") return their report in that result. Background ones
   (status "async_launched") deliver it later in a line whose origin has
-  kind "peer" and from = the subagent's id.
+  kind "peer" and from = the subagent's id (marked isMeta). From 2.1.330 the
+  delivery is a line with origin kind "task-notification" whose text holds
+  <task-id>subagent id</task-id> and <result>report</result>.
 
 Messages from the person
   User lines with origin.kind "human". Older versions have no origin, so a
@@ -47,6 +49,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import os
 from datetime import datetime
 from typing import Dict, List, Optional, Tuple
@@ -357,6 +360,14 @@ def _read_user_line(r: dict, ts, agent: Agent, run: Run, calls: Dict[str, ToolCa
     if isinstance(origin, dict) and origin.get("kind") == "peer":
         links.deliveries.append((origin, ts))
         return
+    # Claude Code 2.1.330 and later: a "task-notification" whose text carries the
+    # subagent's id and its report. Background shell tasks use the same shape; their
+    # ids don't match any subagent, so _link ignores them.
+    if isinstance(origin, dict) and origin.get("kind") == "task-notification":
+        note = parse_task_notification(text_of(content))
+        if note:
+            links.deliveries.append((note, ts))
+        return
     if r.get("isMeta"):
         return
     if isinstance(origin, dict):
@@ -364,6 +375,20 @@ def _read_user_line(r: dict, ts, agent: Agent, run: Run, calls: Dict[str, ToolCa
             run.human_messages.append(ts)
     elif isinstance(content, (str, list)):
         run.human_messages.append(ts)  # older versions: no origin field
+
+
+TASK_TAG_RE = {k: re.compile(rf"<{k}>(.*?)</{k}>", re.S) for k in ("task-id", "status", "result")}
+
+
+def parse_task_notification(text: str) -> Optional[dict]:
+    """Turn a <task-notification> message into the same shape as a peer hand-back."""
+    if "<task-notification>" not in (text or ""):
+        return None
+    found = {k: (rx.search(text).group(1).strip() if rx.search(text) else "") for k, rx in TASK_TAG_RE.items()}
+    if not found["task-id"]:
+        return None
+    return {"kind": "task-notification", "from": found["task-id"], "status": found["status"],
+            "handbackReportText": found["result"]}
 
 
 # ---------------------------------------------------------------- reading a whole run

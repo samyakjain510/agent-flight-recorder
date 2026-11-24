@@ -1,0 +1,546 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>flightrec · f00f22b5</title>
+<style>
+:root {
+  color-scheme: light dark;
+  --bg: #faf9f5; --card: #ffffff; --soft: #f1efe8; --line: #e4e2da; --line2: #cfccc2;
+  --fg: #1f1f1d; --mut: #6b6a65; --faint: #9a988f;
+  --acc: #185FA5; --acc-bg: #E6F1FB;
+  --call: #7F77DD; --base: #B4B2A9; --tool: #1D9E75; --err: #E24B4A; --spawn: #D85A30;
+  --used: #3B6D11; --used-bg: #EAF3DE; --unclear: #854F0B; --unclear-bg: #FAEEDA;
+  --none: #5F5E5A; --none-bg: #F1EFE8; --you: #185FA5;
+  --f-startup: #888780; --f-repeat: #D85A30; --f-lineage: #3B6D11; --f-conflict: #E24B4A; --f-approval: #185FA5;
+  --fade: rgba(250, 249, 245, 0.72);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1d1d1b; --card: #262624; --soft: #2e2e2b; --line: #3a3a37; --line2: #4a4a46;
+    --fg: #ecebe6; --mut: #a3a29c; --faint: #7a7973;
+    --acc: #85B7EB; --acc-bg: #0C447C;
+    --call: #AFA9EC; --base: #5F5E5A; --tool: #5DCAA5; --err: #F09595; --spawn: #F0997B;
+    --used: #97C459; --used-bg: #27500A; --unclear: #FAC775; --unclear-bg: #633806;
+    --none: #B4B2A9; --none-bg: #444441; --you: #85B7EB;
+    --f-startup: #B4B2A9; --f-repeat: #F0997B; --f-lineage: #97C459; --f-conflict: #F09595; --f-approval: #85B7EB;
+    --fade: rgba(29, 29, 27, 0.72);
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+main { max-width: 1400px; margin: 0 auto; padding: 20px 16px 40px; }
+h1 { font-size: 20px; font-weight: 500; margin: 0; }
+h2 { font-size: 13px; font-weight: 500; color: var(--mut); margin: 0 0 6px; }
+button, select { font: inherit; color: var(--fg); background: var(--card); border: 1px solid var(--line2); border-radius: 6px; padding: 4px 10px; cursor: pointer; }
+button:hover { background: var(--soft); }
+button:focus-visible, select:focus-visible, input:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--acc); outline-offset: 1px; }
+.sub { color: var(--mut); font-size: 13px; }
+.badge { display: inline-block; font-size: 11px; padding: 1px 7px; border-radius: 6px; white-space: nowrap; }
+.b-used { background: var(--used-bg); color: var(--used); }
+.b-unclear { background: var(--unclear-bg); color: var(--unclear); }
+.b-none { background: var(--none-bg); color: var(--none); }
+.metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin: 14px 0; }
+.metric { background: var(--soft); border-radius: 8px; padding: 8px 12px; }
+.metric .k { font-size: 12px; color: var(--mut); }
+.metric .v { font-size: 20px; font-weight: 500; font-variant-numeric: tabular-nums; }
+.metric .t { font-size: 12px; color: var(--faint); }
+.controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
+.controls input[type=range] { flex: 1; min-width: 160px; }
+#clock { min-width: 190px; text-align: right; font-variant-numeric: tabular-nums; color: var(--mut); font-size: 13px; }
+.lanes { display: flex; border: 1px solid var(--line); border-radius: 8px; background: var(--card); overflow: hidden; }
+#labels { flex: 0 0 250px; border-right: 1px solid var(--line); min-width: 0; }
+.lab { display: flex; flex-direction: column; justify-content: center; padding: 0 10px; cursor: pointer; overflow: hidden; }
+.lab:hover, .lab.sel { background: var(--soft); }
+.lab .n { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 13px; }
+.lab .m { font-size: 11px; color: var(--mut); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#area { flex: 1; overflow-x: auto; overflow-y: hidden; position: relative; min-width: 0; }
+#svg { display: block; cursor: crosshair; }
+.legend { display: flex; gap: 14px; flex-wrap: wrap; color: var(--mut); font-size: 12px; margin: 8px 0 16px; align-items: center; }
+.sw { display: inline-block; width: 12px; height: 9px; border-radius: 2px; vertical-align: -1px; margin-right: 4px; }
+.panels { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 12px; }
+.panel { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; min-width: 0; }
+.feed div, .fl div.item { padding: 5px 0; border-top: 1px solid var(--line); cursor: pointer; font-size: 13px; overflow-wrap: anywhere; }
+.feed div:first-child, .fl div.item:first-child { border-top: none; }
+.feed div:hover, .fl div.item:hover { background: var(--soft); }
+.feed .w, .fl .w { color: var(--mut); font-variant-numeric: tabular-nums; margin-right: 6px; }
+.feed .ag { color: var(--mut); margin-right: 6px; }
+#detail { font-size: 13px; overflow-wrap: anywhere; }
+#detail table { border-collapse: collapse; margin: 4px 0 8px; }
+#detail td { padding: 2px 12px 2px 0; vertical-align: top; }
+#detail td:first-child { color: var(--mut); white-space: nowrap; }
+#detail pre { white-space: pre-wrap; font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--soft); padding: 8px 10px; border-radius: 6px; max-height: 340px; overflow: auto; margin: 4px 0 10px; }
+#detail a { color: var(--acc); }
+.chips { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 6px; }
+.chip { font-size: 12px; padding: 2px 9px; border-radius: 6px; border: 1px solid var(--line2); background: var(--card); cursor: pointer; }
+.chip.on { background: var(--acc-bg); color: var(--acc); border-color: var(--acc); }
+.note { font-size: 12px; color: var(--mut); margin-top: 18px; line-height: 1.6; }
+.dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: 0; }
+kbd { font: 11px ui-monospace, Menlo, monospace; border: 1px solid var(--line2); border-radius: 4px; padding: 0 4px; }
+@media (max-width: 700px) { #labels { flex-basis: 130px; } }
+</style>
+</head>
+<body>
+<main>
+  <div style="display:flex;gap:10px;align-items:baseline;flex-wrap:wrap">
+    <h1 id="title"></h1>
+    <span class="sub" id="meta"></span>
+  </div>
+  <div class="metrics" id="metrics"></div>
+  <div class="controls">
+    <button id="play">Play</button>
+    <button id="prev" aria-label="Previous event" title="Previous event (left arrow)">◀</button>
+    <button id="next" aria-label="Next event" title="Next event (right arrow)">▶</button>
+    <select id="speed" aria-label="Replay speed"></select>
+    <input type="range" id="slider" min="0" step="any" aria-label="Playhead">
+    <span id="clock"></span>
+  </div>
+  <div class="controls">
+    <span class="sub">Zoom</span>
+    <button id="zout" aria-label="Zoom out">−</button>
+    <button id="zfit">Fit</button>
+    <button id="zin" aria-label="Zoom in">+</button>
+    <span class="sub" id="zlabel"></span>
+  </div>
+  <div class="lanes">
+    <div id="labels"></div>
+    <div id="area"><svg id="svg" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Timeline with one lane per agent"></svg></div>
+  </div>
+  <div class="legend" id="legend"></div>
+  <div class="panels">
+    <div class="panel"><h2>At the playhead</h2><div class="feed" id="feed"></div></div>
+    <div class="panel"><h2>Selected</h2><div id="detail"></div></div>
+    <div class="panel"><h2>Findings</h2><div class="chips" id="chips"></div><div class="fl" id="findings"></div></div>
+  </div>
+  <div class="note" id="notes"></div>
+</main>
+<script>
+const DATA = {"version":1,"session":"f00f22b5-b3de-401e-8934-3cbb363612ac","title":"Demo: a lead and three Haiku helpers review flightrec's own code","project":"-home-demo-Developer-flightrec-demo-workspace","redacted":false,"started":1795546554.601,"ended":1795546665.311,"wall":111,"active":111,"display":110.71,"gap":600.0,"breaks":[],"totals":{"cost":0.2359,"cost_unknown":0,"lead_cost":0.1968,"sub_cost":0.0391,"tokens":1402796,"calls":28,"tools":37,"copied":0,"peak":3},"models":["claude-haiku-5-5","claude-sonnet-5-5"],"agents":[{"id":"main","parent":null,"depth":0,"kind":"lead","label":"lead","model":"claude-sonnet-5-5","background":null,"missing":false,"start":0.0,"end":110.71,"report":null,"report_real":null,"instructions":"","report_text":"","report_chars":0,"cost":0.1968,"tokens":{"in":18,"cache_write":39721,"cache_read":179015,"out":2000},"calls":6,"tools":4,"base_context":32843,"base_share":null,"lineage":null},{"id":"aafe5e1d6dc56ac71","parent":0,"depth":1,"kind":"general-purpose","label":"general-purpose · Package map","model":"claude-haiku-5-5","background":true,"missing":false,"start":1.797,"end":10.094,"report":10.14,"report_real":1795546564.741,"instructions":"In the repo at /home/demo/Developer/flightrec-demo/workspace, for each module in src/flightrec, say in one line what it does and which other flightrec modules it imports. Read-only; do not edit any file. Report as a concise list.","report_text":"The `flightrec` package has 12 modules under `src/flightrec`. Each description comes from the module's docstring or header, and the import lists come from a repo-wide grep. Bash was denied, so I did not run any commands.\n\n- **`__init__.py`**: Package docstring; defines the version string and imports no other flightrec module.\n- **`__main__.py`**: Entry point for `python -m flightrec`, which calls `cli.main`. Imports: `cli`.\n- **`analyze.py`**: Analyzers that turn a Run into findings (repeated work, startup cost, lineage, file conflicts, approvals, parallelism). Imports: `model`, `pricing`.\n- **`check.py`**: Cross-checks flightrec's token counts against Claude Code's own totals. Imports: `model`.\n- **`claude_code.py`**: Adapter that reads Claude Code transcript files into the run model. Imports: `model`.\n- **`cli.py`**: The `flightrec` command with list, show, check, analyze, view and study subcommands. Imports: `__init__` (for `__version__`), `fmt`, `analyze`, `check`, `claude_code`, `corpus`, `model`; lazily imports `view` and `study` inside functions.\n- **`corpus.py`**: Computes facts that need more than one session file, such as shared content across sessions. Imports: `claude_code`, `model`.\n- **`fmt.py`**: Small formatting helpers for terminal output. Imports: `model`.\n- **`model.py`**: The run model describing one multi-agent run (Run, Agent, ToolCall, Usage, Request, Approval, Event). Imports: none.\n- **`pricing.py`**: API list prices used to weight token types by cost. Imports: `model`.\n- **`study.py`**: Aggregates findings across every multi-agent run on the machine. Imports: `analyze`, `check`, `claude_code`, `corpus`, `model`, `pricing`.\n- **`view.py`**: Renders one run as a self-contained HTML page. Imports: `analyze`, `fmt`, `model`, `pricing`.\n\n`viewer.html` is also in the directory, but it is a static asset, not a Python module.","report_chars":1875,"cost":0.0055,"tokens":{"in":6,"cache_write":33033,"cache_read":54595,"out":1704},"calls":3,"tools":4,"base_context":25828,"base_share":0.678,"lineage":{"status":"unclear","report":"unclear","items":7,"reused":1,"overlap":0.0,"files_written":0,"picked_up":0,"revised":0,"replaced":0}},{"id":"a686577c8f67a015c","parent":0,"depth":1,"kind":"general-purpose","label":"general-purpose · Test gaps","model":"claude-haiku-5-5","background":true,"missing":false,"start":2.716,"end":14.224,"report":14.294,"report_real":1795546568.895,"instructions":"In the repo at /home/demo/Developer/flightrec-demo/workspace, list the public functions (no leading underscore) in src/flightrec/analyze.py and src/flightrec/view.py that no test in tests/ calls directly. Check by grepping tests/. Read-only; do not edit any file. Report a concise list per file.","report_text":"**src/flightrec/analyze.py**: no test calls these directly:\n- `main_model`\n- `write_price`\n- `read_price`\n- `calibrate`\n- `target`\n- `signals`\n- `shingles`\n- `summarize`\n\n**src/flightrec/view.py**: no test calls these directly:\n- `target_of`\n- `agent_label`\n- `index_page`\n- `index_row`\n\nThe check used the Grep tool over `tests/`, since Bash was denied. The only hit for `target` is a dict key (`p[\"tools\"][0][\"target\"]` in `tests/test_view.py:79`), not a call. I did not check indirect coverage, such as `summarize` being exercised through another function. No files were edited.","report_chars":581,"cost":0.0038,"tokens":{"in":10,"cache_write":9643,"cache_read":139056,"out":2338},"calls":5,"tools":4,"base_context":25858,"base_share":0.41,"lineage":{"status":"used","report":"used","items":8,"reused":7,"overlap":0.024,"files_written":0,"picked_up":0,"revised":0,"replaced":0}},{"id":"af50710fa53611c9a","parent":0,"depth":1,"kind":"general-purpose","label":"general-purpose · Docs check","model":"claude-haiku-5-5","background":true,"missing":false,"start":3.672,"end":101.264,"report":101.391,"report_real":1795546655.992,"instructions":"In the repo at /home/demo/Developer/flightrec-demo/workspace, read docs/learn/*.md and list any statement about how the code works that the code in src/flightrec does not back up. For each, quote the statement and name the doc file and the function/file in src/flightrec you checked. Read-only; do not edit any file. Report a concise list.","report_text":"I found four statements the code does not back and one doc-to-code inconsistency. Bash was denied, so I used Glob, Grep and Read. I edited nothing.\n\n**Not backed by `src/flightrec`**\n\n1. **`docs/learn/01-reading-transcripts.md`**: \"So all format knowledge lives in one file, `src/flightrec/claude_code.py`.\" This is contradicted by `src/flightrec/corpus.py` (lines 34–46). It reads the raw transcript fields directly: the `\"requestId\"` substring test, `r.get(\"type\") == \"assistant\"`, and `r.get(\"timestamp\")`. The `claude_code.py` header also says it is \"the only file that knows Claude Code's on-disk format.\"\n\n2. **`docs/learn/02-what-a-token-costs.md`**: \"I didn't copy a price list.\" `src/flightrec/pricing.py` (lines 7–8) says the table is \"from Anthropic's published list (Nov 2026).\" The doc's Opus prices ($4, $5, $8, $0.20, $20) and the 2x fast-mode multiplier do match `PRICES` and `FAST_MODE_MULTIPLIER` in that file.\n\n3. **`docs/learn/02-what-a-token-costs.md`**: \"Claude Code saves its own dollar cost next to its token counts, so I worked backwards from those records,\" and \"reproduce Claude Code's recorded cost to the cent in 37 of 38 Opus records\" and \"match Claude Code's to the cent in all 12 clean sessions.\" No code in `src/flightrec` reads a recorded dollar cost. `claude_code.py` parses no cost field, and `check.py` (`FIELDS`, lines 24–29) compares tokens only. The `pricing.py` docstring asserts the cent-level match, but nothing in `src/flightrec` performs it.\n\n4. **`docs/learn/02-what-a-token-costs.md`**: \"It ignores anything the parent already had.\" This holds for distinctive items but not for phrases. In `analyze.py` `_report_channel`, the item channel subtracts the parent's earlier text (line 275, `signals(known_text)`). The phrase channel subtracts only the instructions (line 279), and `overlap` (line 280) and `first_use` (line 283) match against the parent's full later text. So a phrase the lead already had can push a report to \"used\" through the `overlap &gt;= 0.05` test at line 287. The `analyze.py` module docstring (lines 240–252) says \"exact phrases the parent didn't already have,\" which is also not what the code does.\n\n5. **`docs/learn/02-what-a-token-costs.md`**: the judge details (\"sees … the next 60,000 characters,\" \"6 controls,\" \"never sees my verdict,\" \"680k Haiku tokens\"). None of this is in `src/flightrec`. The judge is `scripts/judge_lineage.py`, which exists but is outside the requested scope, so I did not check it. `analyze.py` (lines 290–291) only cites its finding in a comment.\n\n**Could not check from `src/flightrec`**\n\n- `docs/learn/01-reading-transcripts.md`: \"a test for each,\" and `docs/learn/03-the-viewer.md`: \"A unit test checks this.\" No tests are in `src/flightrec`.\n- The measured numbers in docs 01–03 (chars-per-token 2.05/2.44/2.02, the \"835 steps,\" \"48k median,\" \"23%,\" \"$0.77,\" \"1,121 of 4,700 calls\") are runtime outputs of `analyze.calibrate`, `study.py` and `check.py`. The code computes them but does not hard-code them, so they cannot be confirmed without the transcripts.\n\n**Inconsistency between code and doc**\n\n- `docs/learn/03-the-viewer.md` says \"One of my runs spans 13 days.\" The `view.py` module docstring says \"spans 12 days.\"\n\n**Backed by the code**\n\nThe rest of the checked claims hold up:\n- **Lesson 1:** transcript paths, line types, grouping by request and field-wise max, subagent linking through `toolUseId` and `agentId`, the copied-history marking, the clean-session rule, and the compaction and live reasons.\n- **Lesson 2:** the price table, the carried-cost formula, startup base context, the file-channel rules, the `used` / `unclear` / `no trace found` thresholds, and settings-versus-person approvals.\n- **Lesson 3:** no external loads, transcript text inserted via `textContent`, lane and arrow colours, the 10-minute idle gap, replay keys, the findings filter, \"Zoom to its time,\" and tool results stored as size only.\n- **Lesson 0:** `data/` is ignored by `.gitignore`.","report_chars":3986,"cost":0.0298,"tokens":{"in":28,"cache_write":87058,"cache_read":833491,"out":21080},"calls":14,"tools":25,"base_context":25861,"base_share":0.13,"lineage":{"status":"used","report":"used","items":44,"reused":3,"overlap":0.042,"files_written":0,"picked_up":0,"revised":0,"replaced":0}}],"calls":[{"a":0,"s":1.769,"e":3.668,"real":1795546556.37,"in":32843,"fresh":2,"cw":32841,"cr":0,"out":588,"cost":0.13725,"m":1,"copied":false},{"a":1,"s":2.855,"e":3.368,"real":1795546557.456,"in":25828,"fresh":2,"cw":25826,"cr":0,"out":299,"cost":0.00338,"m":0,"copied":false},{"a":2,"s":3.835,"e":3.835,"real":1795546558.436,"in":25858,"fresh":2,"cw":2172,"cr":23684,"out":156,"cost":0.00059,"m":0,"copied":false},{"a":1,"s":4.235,"e":5.624,"real":1795546558.836,"in":28771,"fresh":2,"cw":2943,"cr":25826,"out":491,"cost":0.00087,"m":0,"copied":false},{"a":0,"s":4.343,"e":4.343,"real":1795546558.944,"in":34653,"fresh":2,"cw":1810,"cr":32841,"out":34,"cost":0.01087,"m":1,"copied":false},{"a":3,"s":4.744,"e":4.744,"real":1795546559.345,"in":25861,"fresh":2,"cw":2175,"cr":23684,"out":175,"cost":0.0006,"m":0,"copied":false},{"a":2,"s":5.264,"e":6.261,"real":1795546559.865,"in":29057,"fresh":2,"cw":3199,"cr":25856,"out":535,"cost":0.00093,"m":0,"copied":false},{"a":3,"s":5.488,"e":6.282,"real":1795546560.089,"in":27858,"fresh":2,"cw":1997,"cr":25859,"out":293,"cost":0.00065,"m":0,"copied":false},{"a":2,"s":6.975,"e":7.897,"real":1795546561.576,"in":29830,"fresh":2,"cw":773,"cr":29055,"out":356,"cost":0.00057,"m":0,"copied":false},{"a":3,"s":6.993,"e":7.656,"real":1795546561.594,"in":28458,"fresh":2,"cw":600,"cr":27856,"out":347,"cost":0.00053,"m":0,"copied":false},{"a":1,"s":7.486,"e":10.094,"real":1795546562.087,"in":33035,"fresh":2,"cw":4264,"cr":28769,"out":914,"cost":0.00128,"m":0,"copied":false},{"a":2,"s":9.145,"e":10.008,"real":1795546563.746,"in":30635,"fresh":2,"cw":805,"cr":29828,"out":405,"cost":0.0006,"m":0,"copied":false},{"a":0,"s":11.115,"e":11.115,"real":1795546565.716,"in":35960,"fresh":4,"cw":1305,"cr":34651,"out":41,"cost":0.0091,"m":1,"copied":false},{"a":2,"s":13.32,"e":14.224,"real":1795546567.921,"in":33329,"fresh":2,"cw":2694,"cr":30633,"out":886,"cost":0.00109,"m":0,"copied":false},{"a":3,"s":14.413,"e":15.94,"real":1795546569.014,"in":36405,"fresh":2,"cw":7947,"cr":28456,"out":1827,"cost":0.00219,"m":0,"copied":false},{"a":0,"s":15.467,"e":15.467,"real":1795546570.068,"in":36719,"fresh":4,"cw":759,"cr":35956,"out":37,"cost":0.00701,"m":1,"copied":false},{"a":3,"s":17.604,"e":18.042,"real":1795546572.205,"in":44470,"fresh":2,"cw":8065,"cr":36403,"out":388,"cost":0.00157,"m":0,"copied":false},{"a":3,"s":22.006,"e":23.565,"real":1795546576.607,"in":52566,"fresh":2,"cw":8096,"cr":44468,"out":1203,"cost":0.00206,"m":0,"copied":false},{"a":3,"s":24.159,"e":24.512,"real":1795546578.76,"in":54770,"fresh":2,"cw":2204,"cr":52564,"out":124,"cost":0.00086,"m":0,"copied":false},{"a":3,"s":39.368,"e":40.342,"real":1795546593.969,"in":63619,"fresh":2,"cw":8849,"cr":54768,"out":3382,"cost":0.00335,"m":0,"copied":false},{"a":3,"s":46.137,"e":47.51,"real":1795546600.738,"in":73690,"fresh":2,"cw":10071,"cr":63617,"out":1538,"cost":0.00266,"m":0,"copied":false},{"a":3,"s":52.204,"e":55.022,"real":1795546606.805,"in":84973,"fresh":2,"cw":11283,"cr":73688,"out":1686,"cost":0.00299,"m":0,"copied":false},{"a":3,"s":61.017,"e":62.263,"real":1795546615.618,"in":100612,"fresh":2,"cw":15639,"cr":84971,"out":1507,"cost":0.00356,"m":0,"copied":false},{"a":3,"s":79.388,"e":80.543,"real":1795546633.989,"in":106143,"fresh":2,"cw":5531,"cr":100610,"out":4112,"cost":0.00375,"m":0,"copied":false},{"a":3,"s":81.935,"e":82.345,"real":1795546636.536,"in":110408,"fresh":2,"cw":4265,"cr":106141,"out":275,"cost":0.00173,"m":0,"copied":false},{"a":3,"s":95.34,"e":101.264,"real":1795546649.941,"in":110744,"fresh":2,"cw":336,"cr":110406,"out":4223,"cost":0.00326,"m":0,"copied":false},{"a":0,"s":106.763,"e":106.763,"real":1795546661.364,"in":38856,"fresh":4,"cw":2137,"cr":36715,"out":805,"cost":0.02028,"m":1,"copied":false},{"a":0,"s":110.71,"e":110.71,"real":1795546665.311,"in":39723,"fresh":2,"cw":869,"cr":38852,"out":495,"cost":0.01232,"m":1,"copied":false}],"tools":[{"a":0,"s":1.769,"e":1.823,"real":1795546556.37,"name":"Agent","target":"Package map","chars":1078,"media":false,"error":false,"approval":{"decision":"accept","source":"config","by_you":false},"spawned":1},{"a":0,"s":2.705,"e":2.726,"real":1795546557.306,"name":"Agent","target":"Test gaps","chars":1078,"media":false,"error":false,"approval":{"decision":"accept","source":"config","by_you":false},"spawned":2},{"a":0,"s":3.668,"e":3.676,"real":1795546558.269,"name":"Agent","target":"Docs check","chars":1078,"media":false,"error":false,"approval":{"decision":"accept","source":"config","by_you":false},"spawned":3},{"a":0,"s":106.763,"e":106.808,"real":1795546661.364,"name":"Write","target":"/home/demo/Developer/flightrec-demo/workspace/REVIEW.md","chars":151,"media":false,"error":false,"approval":{"decision":"accept","source":"config","by_you":false},"spawned":null},{"a":1,"s":2.855,"e":3.166,"real":1795546557.456,"name":"Bash","target":"List flightrec source modules","chars":1262,"media":false,"error":false,"approval":{"decision":"accept","source":"config","by_you":false},"spawned":null},{"a":1,"s":3.368,"e":3.384,"real":1795546557.969,"name":"Bash","target":"Show imports and module headers","chars":678,"media":false,"error":true,"approval":{"decision":"reject","source":"config","by_you":false},"spawned":null},{"a":1,"s":4.956,"e":5.004,"real":1795546559.557,"name":"Grep","target":"^\\s*(from|import)\\s  in /home/demo/Developer/flightrec-demo/workspace/src/flightrec","chars":5103,"media":false,"error":false,"approval":{"decision":"accept","source":"config","by_you":false},"spawned":null},{"a":1,"s":5.624,"e":5.655,"real":1795546560.225,"name":"Grep","target":"^\"\"\"|^#|^\\S.*\"\"\"$  in /home/demo/Developer/flightrec-demo/workspace/src/flightrec","chars":4104,"media":false,"error":false,"approval":{"decision":"accept","source":"config","by_you":false},"spawned":null},{"a":2,"s":3.835,"e":3.861,"real":1795546558.436,"name":"Bash","target":"List top-level definitions in target files and test files","chars":2909,"media":false,"error":false,"approval":{"decision":"accept","source":"config","by_you":false},"spawned":null},{"a":2,"s":6.261,"e":6.273,"real":1795546560.862,"name":"Bash","target":"Count test references to each public function name","chars":678,"media":false,"error":true,"approval":{"decision":"reject","source":"config","by_you":false},"spawned":null},{"a":2,"s":7.897,"e":7.951,"real":1795546562.498,"name":"Grep","target":"\\b(main_model|write_price|read_price|calibrate|later_calls|target|find_repeats|startup_costs|signals|shingles|lineage|file_conflicts|approvals|peak_parallel|sum… <138 more chars>","chars":885,"media":false,"error":false,"approval":{"decision":"accept","source":"config","by_you":false},"spawned":null},{"a":2,"s":10.008,"e":10.051,"real":1795546564.609,"name":"Grep","target":"\\b(lineage|target|build|approvals|file_conflicts|peak_parallel|startup_costs|one_result_steps|later_calls|find_repeats|render)\\b  in /home/demo/Developer/flight… <24 more chars>","chars":5012,"media":false,"error":false,"approval":{"decision":"accept","source":"config","by_you":false},"spawned":null},{"a":3,"s":4.744,"e":4.762,"real":1795546559.345,"name":"Bash","target":"List learn docs and flightrec source files","chars":678,"media":false,"error":true,"approval":{"decision":"reject","source":"config","by_you":false},"spawned":null},{"a":3,"s":6.153,"e":6.19,"real":1795546560.754,"name":"Glob","target":"docs/learn/*.md  in /home/demo/Developer/flightrec-demo/workspace","chars":129,"media":false,"error":false,"approval":{"decision":"accept","source":"config","by_you":false},"spawned":null},{"a":3,"s":6.282,"e":6.302,"real":1795546560.883,"name":"Glob","target":"**/*  in /home/demo/Developer/flightrec-demo/workspace/src/flightrec","chars":313,"media":false,"error":false,"approval":{"decision":"accept","source":"config","by_you":false},"spawned":null},{"a":3,"s":6.993,"e":7.016,"real":1795546561.594,"name":"Read","target":"/home/demo/Developer/flightrec-demo/workspace/docs/learn/00-big-picture.md","chars":3623,"media":false,"error":false,"approval":{"decision":"accept","source":"config","by_you":false},"spawned":null},{"a":3,"s":7.315,"e":7.333,"real":1795546561.916,"name":"Read","target":"/home/demo/Developer/flightrec-demo/workspace/docs/learn/01-reading-transcripts.md","chars":4343,"media":false,"error":false,"approval":{"decision":"accept","source":"config","by_you":false},"spawned":null},{"a":3,"s":7.463,"e":7.472,"real":1795546562.064,"name":"Read","target":"/home/demo/Developer/flightrec-demo/workspace/docs/learn/02-what-a-token-costs.md","chars":9543,"media":false,"error":false,"approval":{"decision":"accept","source":"config","by_you":false},"spawned":null},{"a":3,"s":7.656,"e":7.667,"real":1795546562.257,"name":"Read","target":"/home/demo/Developer/flightrec-demo/workspace/docs/learn/03-the-viewer.md","chars":3629,"media":false,"error":false,"approval":{"decision":"accept","source":"config","by_you":false},"spawned":null},{"a":3,"s":15.183,"e":15.215,"real":1795546569.784,"name":"Grep","target":".  in /home/demo/Developer/flightrec-demo/workspace/src/flightrec/pricing.py","chars":2444,"media":false,"error":false,"approval":{"decision":"accept","source":"config","by_you":false},"spawned":null},{"a":3,"s":15.94,"e":15.988,"real":1795546570.541,"name":"Grep","target":"(?i)(\\.jsonl|meta\\.json|subagents|projects|cost-state|attachment|\\\"assistant\\\"|\\\"user\\\"|requestId|request_id|message\\.id|tool_use_id|agentId|fast)  in /home/dem… <50 more chars>","chars":11475,"media":false,"error":false,"approval":{"decision":"accept","source":"config","by_you":false},"spawned":null},{"a":3,"s":18.042,"e":18.063,"real":1795546572.643,"name":"Read","target":"/home/demo/Developer/flightrec-demo/workspace/src/flightrec/claude_code.py","chars":20346,"media":false,"error":false,"approval":{"decision":"accept","source":"config","by_you":false},"spawned":null},{"a":3,"s":23.565,"e":23.628,"real":1795546578.166,"name":"Grep","target":"(?i)(chars.per|per.token|carried|startup|base context|first.*call|approv|settings|source|conflict|repeat|lineage|unclear|no trace|used|judge|haiku|60000|60_000|… <146 more chars>","chars":2244,"media":false,"error":false,"approval":{"decision":"accept","source":"config","by_you":false},"spawned":null},{"a":3,"s":24.512,"e":24.535,"real":1795546579.113,"name":"Read","target":"/home/demo/Developer/flightrec-demo/workspace/src/flightrec/analyze.py","chars":21143,"media":false,"error":false,"approval":{"decision":"accept","source":"config","by_you":false},"spawned":null},{"a":3,"s":39.878,"e":39.892,"real":1795546594.479,"name":"Read","target":"/home/demo/Developer/flightrec-demo/workspace/src/flightrec/model.py","chars":9379,"media":false,"error":false,"approval":{"decision":"accept","source":"config","by_you":false},"spawned":null},{"a":3,"s":40.092,"e":40.104,"real":1795546594.693,"name":"Read","target":"/home/demo/Developer/flightrec-demo/workspace/src/flightrec/corpus.py","chars":2999,"media":false,"error":false,"approval":{"decision":"accept","source":"config","by_you":false},"spawned":null},{"a":3,"s":40.342,"e":40.364,"real":1795546594.943,"name":"Read","target":"/home/demo/Developer/flightrec-demo/workspace/src/flightrec/check.py","chars":4797,"media":false,"error":false,"approval":{"decision":"accept","source":"config","by_you":false},"spawned":null},{"a":3,"s":47.231,"e":47.253,"real":1795546601.832,"name":"Grep","target":"(?i)(costUSD|total_cost|cost_usd|to the cent|\\bcent\\b|reported.*cost|cost.*reported|recorded)  in /home/demo/Developer/flightrec-demo/workspace/src/flightrec","chars":1330,"media":false,"error":false,"approval":{"decision":"accept","source":"config","by_you":false},"spawned":null},{"a":3,"s":47.51,"e":47.514,"real":1795546602.111,"name":"Read","target":"/home/demo/Developer/flightrec-demo/workspace/src/flightrec/study.py","chars":22198,"media":false,"error":false,"approval":{"decision":"accept","source":"config","by_you":false},"spawned":null},{"a":3,"s":53.974,"e":54.023,"real":1795546608.575,"name":"Grep","target":"(?i)(<script[^>]*src|https?://|innerHTML|insertAdjacentHTML|outerHTML|textContent|600|10 \\* 60|10 minutes|ArrowLeft|ArrowRight|keydown|Zoom|zoom|#2|purple|green… <222 more chars>","chars":10751,"media":false,"error":false,"approval":{"decision":"accept","source":"config","by_you":false},"spawned":null},{"a":3,"s":54.341,"e":54.361,"real":1795546608.942,"name":"Read","target":"/home/demo/Developer/flightrec-demo/workspace/src/flightrec/view.py","chars":19636,"media":false,"error":false,"approval":{"decision":"accept","source":"config","by_you":false},"spawned":null},{"a":3,"s":55.022,"e":55.06,"real":1795546609.623,"name":"Grep","target":"(?i)(view|--all|index|def cmd_view|def _view|open\\()  in /home/demo/Developer/flightrec-demo/workspace/src/flightrec/cli.py","chars":1983,"media":false,"error":false,"approval":{"decision":"accept","source":"config","by_you":false},"spawned":null},{"a":3,"s":61.836,"e":61.858,"real":1795546616.437,"name":"Read","target":"/home/demo/Developer/flightrec-demo/workspace/src/flightrec/viewer.html","chars":2833,"media":false,"error":false,"approval":{"decision":"accept","source":"config","by_you":false},"spawned":null},{"a":3,"s":62.263,"e":62.283,"real":1795546616.864,"name":"Read","target":"/home/demo/Developer/flightrec-demo/workspace/src/flightrec/viewer.html","chars":4722,"media":false,"error":false,"approval":{"decision":"accept","source":"config","by_you":false},"spawned":null},{"a":3,"s":80.209,"e":80.373,"real":1795546634.81,"name":"Glob","target":"{scripts/*.py,.gitignore}  in /home/demo/Developer/flightrec-demo/workspace","chars":35,"media":false,"error":false,"approval":{"decision":"accept","source":"config","by_you":false},"spawned":null},{"a":3,"s":80.543,"e":80.592,"real":1795546635.144,"name":"Grep","target":"(?i)(60000|60_000|haiku|judge|blind)  in /home/demo/Developer/flightrec-demo/workspace/src/flightrec","chars":107,"media":false,"error":false,"approval":{"decision":"accept","source":"config","by_you":false},"spawned":null},{"a":3,"s":82.345,"e":82.385,"real":1795546636.946,"name":"Grep","target":"data  in /home/demo/Developer/flightrec-demo/workspace/.gitignore","chars":88,"media":false,"error":false,"approval":{"decision":"accept","source":"config","by_you":false},"spawned":null}],"said":[{"a":0,"d":4.343,"real":1795546558.944,"text":"All three helpers are running in the background. I'm waiting for their reports before I write REVIEW.md."},{"a":1,"d":4.391,"real":1795546558.992,"text":"Bash is denied, so I'll use the Grep and Read tools instead."},{"a":3,"d":5.736,"real":1795546560.337,"text":"Bash is denied here, so I'll use the Glob, Grep, and Read tools to find and read the files."},{"a":2,"d":7.133,"real":1795546561.734,"text":"Bash is denied here, so I'll use the Grep tool on tests/ instead."},{"a":2,"d":9.411,"real":1795546564.012,"text":"Some hits may be attribute names or fixtures rather than calls to the module functions. I'll check the matching lines in context."},{"a":1,"d":10.094,"real":1795546564.695,"text":"The `flightrec` package has 12 modules under `src/flightrec`. Each description comes from the module's docstring or header, and the import lists come from a repo-wide grep. Bash was denied, so I did not run any commands.\n\n- **`__init__.py`**: Package docstring; defines the version string and imports no other flightrec module.\n- **`__main__.py`**: Entry point for `python -m flightrec`, which calls `cli.main`. Imports: `cli`.\n- **`analyze.py`**: Analyzers that turn a Run into findings (repeated work, startup cost, lineage, file conflicts, approvals, parallelism). Imports: `model`, `pricing`.\n- *… <1275 more chars>"},{"a":0,"d":11.115,"real":1795546565.716,"text":"Package map is back. I'm still waiting on the test-gaps and docs-check helpers before writing REVIEW.md."},{"a":2,"d":14.224,"real":1795546568.825,"text":"**src/flightrec/analyze.py**: no test calls these directly:\n- `main_model`\n- `write_price`\n- `read_price`\n- `calibrate`\n- `target`\n- `signals`\n- `shingles`\n- `summarize`\n\n**src/flightrec/view.py**: no test calls these directly:\n- `target_of`\n- `agent_label`\n- `index_page`\n- `index_row`\n\nThe check used the Grep tool over `tests/`, since Bash was denied. The only hit for `target` is a dict key (`p[\"tools\"][0][\"target\"]` in `tests/test_view.py:79`), not a call. I did not check indirect coverage, such as `summarize` being exercised through another function. No files were edited."},{"a":3,"d":14.692,"real":1795546569.293,"text":"I have all four lessons. Now I'll check each claim against the source, starting with pricing, the transcript format, and the lineage/judge code."},{"a":0,"d":15.467,"real":1795546570.068,"text":"Test gaps report is in. I'm still waiting on the docs-check helper before writing REVIEW.md."},{"a":3,"d":17.806,"real":1795546572.407,"text":"Pricing matches Lesson 2's Opus figures. Next I'll read the transcript reader's header and the subagent-linking code."},{"a":3,"d":22.304,"real":1795546576.905,"text":"The reader matches Lesson 1's layout and linking claims. Next I'll check the analyzers, the lineage logic, the judge, and the viewer."},{"a":3,"d":24.309,"real":1795546578.91,"text":"The grep output was too large, so I'll read the analyzer module directly."},{"a":3,"d":39.621,"real":1795546594.222,"text":"Several claims are already checkable here, including the lineage thresholds and the phrase-overlap logic. Next I'll read the model, corpus, and check modules."},{"a":3,"d":46.458,"real":1795546601.059,"text":"The corpus module reads raw transcript fields directly, which contradicts Lesson 1's single-file claim. Next I'll check the dollar-level cost comparison, the study statistics, and the viewer."},{"a":3,"d":52.58,"real":1795546607.181,"text":"Lesson 2's dollar-to-the-cent match has no implementation in `src/flightrec`, and the \"ignores what the parent already had\" claim does not hold for the phrase channel. Last, I'll check the viewer claims and the CLI."},{"a":3,"d":61.314,"real":1795546615.915,"text":"The viewer's escaping, idle-gap, and replay claims hold up. I still need to confirm the lane colours and the grey first bar, so I'll read the drawing code."},{"a":3,"d":79.748,"real":1795546634.349,"text":"The lane colours, grey base bar, spawn lines, and lineage arrows all match Lesson 3. Last, I'll check whether the judge script and the `data/` ignore rule exist anywhere in the repo, since the question is limited to `src/flightrec`."},{"a":3,"d":101.264,"real":1795546655.865,"text":"I found four statements the code does not back and one doc-to-code inconsistency. Bash was denied, so I used Glob, Grep and Read. I edited nothing.\n\n**Not backed by `src/flightrec`**\n\n1. **`docs/learn/01-reading-transcripts.md`**: \"So all format knowledge lives in one file, `src/flightrec/claude_code.py`.\" This is contradicted by `src/flightrec/corpus.py` (lines 34–46). It reads the raw transcript fields directly: the `\"requestId\"` substring test, `r.get(\"type\") == \"assistant\"`, and `r.get(\"timestamp\")`. The `claude_code.py` header also says it is \"the only file that knows Claude Code's on-dis… <3383 more chars>"},{"a":0,"d":110.71,"real":1795546665.311,"text":"I wrote `REVIEW.md` in the repository root and edited or created no other file. I did not count its words, so I haven't confirmed it meets the 300-word limit.\n\nThe three changes, with the helper each comes from:\n\n1. **Fix the phrase channel in the lineage analyzer** (from the docs check). The docs say lineage \"ignores anything the parent already had,\" but in `analyze.py` the phrase channel doesn't do that. A phrase the lead already had can still push a report to \"used.\"\n2. **Test the untested functions** (from the test-gaps helper). No test calls `calibrate`, `signals`, `shingles` or `summariz… <806 more chars>"}],"humans":[0.0],"compactions":[],"findings":[{"kind":"startup","a":1,"d":2.855,"title":"Started with 26k tokens of base context","detail":"About 68% of this agent's cost went to carrying the context it began with (system prompt, tools, memory, its instructions) across 3 model calls."},{"kind":"startup","a":2,"d":3.835,"title":"Started with 26k tokens of base context","detail":"About 41% of this agent's cost went to carrying the context it began with (system prompt, tools, memory, its instructions) across 5 model calls."},{"kind":"startup","a":3,"d":4.744,"title":"Started with 26k tokens of base context","detail":"About 13% of this agent's cost went to carrying the context it began with (system prompt, tools, memory, its instructions) across 14 model calls."},{"kind":"lineage","status":"unclear","a":1,"d":10.14,"title":"Work unclear","detail":"report: unclear (1 of 7 distinctive items reappeared, 0% of phrases)"},{"kind":"lineage","status":"used","a":2,"d":14.294,"title":"Work used","detail":"report: used (7 of 8 distinctive items reappeared, 2% of phrases)"},{"kind":"lineage","status":"used","a":3,"d":101.391,"title":"Work used","detail":"report: used (3 of 44 distinctive items reappeared, 4% of phrases)"}],"versions":["2.1.330"]};
+</script>
+<script>
+"use strict";
+// All transcript text is inserted with textContent / text nodes, never as HTML.
+
+// ---------------------------------------------------------------- helpers
+const $ = (id) => document.getElementById(id);
+const SVGNS = "http://www.w3.org/2000/svg";
+function h(tag, attrs, ...kids) {
+  const e = document.createElement(tag);
+  for (const k in attrs || {}) {
+    if (k === "class") e.className = attrs[k];
+    else if (k.startsWith("on")) e.addEventListener(k.slice(2), attrs[k]);
+    else e.setAttribute(k, attrs[k]);
+  }
+  for (const c of kids) if (c != null) e.append(c instanceof Node ? c : String(c));
+  return e;
+}
+function s(tag, attrs, parent) {
+  const e = document.createElementNS(SVGNS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(e);
+  return e;
+}
+function tip(el, text) { const t = document.createElementNS(SVGNS, "title"); t.textContent = text; el.appendChild(t); return el; }
+const fmtTok = (n) => n >= 1e6 ? (n / 1e6).toFixed(2) + "M" : n >= 1e4 ? Math.round(n / 1e3) + "k" : n >= 1e3 ? (n / 1e3).toFixed(1) + "k" : String(Math.round(n));
+const fmtUsd = (v) => v == null ? "?" : v >= 100 ? "$" + v.toFixed(0) : v >= 1 ? "$" + v.toFixed(2) : "$" + v.toFixed(3);
+function fmtDur(sec) {
+  sec = Math.max(0, Math.round(sec));
+  if (sec < 60) return sec + "s";
+  if (sec < 3600) return Math.floor(sec / 60) + "m " + String(sec % 60).padStart(2, "0") + "s";
+  if (sec < 86400) return Math.floor(sec / 3600) + "h " + String(Math.floor(sec % 3600 / 60)).padStart(2, "0") + "m";
+  return Math.floor(sec / 86400) + "d " + Math.floor(sec % 86400 / 3600) + "h";
+}
+const fmtClock = (t) => t == null ? "?" : new Date(t * 1000).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit" });
+function bisectRight(arr, v, key) { let lo = 0, hi = arr.length; while (lo < hi) { const m = (lo + hi) >> 1; if (key(arr[m]) <= v) lo = m + 1; else hi = m; } return lo; }
+const short = (t, n) => !t ? "" : t.length > n ? t.slice(0, n - 1) + "…" : t;
+const oneLine = (t) => (t || "").replace(/\s+/g, " ").trim();
+
+// ---------------------------------------------------------------- data prep
+const D = DATA;
+const A = D.agents;
+const TOTAL = Math.max(D.display, 1);
+const statusClass = (st) => st === "used" ? "b-used" : st === "unclear" ? "b-unclear" : "b-none";
+const statusColor = (st) => st === "used" ? "var(--used)" : st === "unclear" ? "var(--unclear)" : "var(--none)";
+const kindNames = { startup: "startup cost", repeat: "repeated work", lineage: "subagent work", conflict: "file conflicts", approval: "your approvals" };
+// active time = display time minus the squeezed breaks before it
+const activeAt = (d) => d - D.breaks.filter((b) => b.d + b.len <= d).reduce((t, b) => t + b.len, 0);
+
+// one feed of everything that happens, for stepping and the "at the playhead" panel
+const feed = [];
+D.calls.forEach((c, i) => c.s != null && feed.push({ d: c.s, type: "call", i, a: c.a }));
+D.tools.forEach((t, i) => t.s != null && feed.push({ d: t.s, type: "tool", i, a: t.a }));
+D.said.forEach((m, i) => m.d != null && feed.push({ d: m.d, type: "said", i, a: m.a }));
+A.forEach((a, i) => i > 0 && a.report != null && feed.push({ d: a.report, type: "report", i, a: a.parent ?? 0 }));
+D.humans.forEach((d, i) => d != null && feed.push({ d, type: "human", i, a: 0 }));
+D.compactions.forEach((d, i) => d != null && feed.push({ d, type: "compact", i, a: 0 }));
+feed.sort((p, q) => p.d - q.d);
+const stops = [...new Set(feed.map((f) => f.d))].sort((p, q) => p - q);
+
+// running totals over model calls, for the counters
+const callsByStart = D.calls.filter((c) => c.s != null).sort((p, q) => p.s - q.s);
+const cumCost = [], cumTok = [];
+let accCost = 0, accTok = 0;
+for (const c of callsByStart) { accCost += c.cost || 0; accTok += c.in + c.out; cumCost.push(accCost); cumTok.push(accTok); }
+
+// display time -> real clock time, from moments that carry both
+const anchors = [];
+for (const c of D.calls) if (c.s != null && c.real != null) anchors.push([c.s, c.real]);
+for (const t of D.tools) if (t.s != null && t.real != null) anchors.push([t.s, t.real]);
+for (const m of D.said) if (m.d != null && m.real != null) anchors.push([m.d, m.real]);
+anchors.sort((p, q) => p[0] - q[0]);
+const inBreak = (d) => D.breaks.find((b) => d > b.d && d < b.d + b.len);
+function realAt(d) {
+  if (!anchors.length || inBreak(d)) return null;
+  const [ad, ar] = anchors[Math.max(0, bisectRight(anchors, d, (p) => p[0]) - 1)];
+  return ar + Math.max(0, d - ad);
+}
+const maxIn = Math.max(1, ...D.calls.map((c) => c.in));
+const firstCall = {};
+D.calls.forEach((c, i) => { if (c.s != null && (!(c.a in firstCall) || c.s < D.calls[firstCall[c.a]].s)) firstCall[c.a] = i; });
+const spawnOf = {};
+D.tools.forEach((t) => { if (t.spawned != null && !(t.spawned in spawnOf)) spawnOf[t.spawned] = t; });
+
+// ---------------------------------------------------------------- state
+let play = TOTAL, playing = false, speed = 60, zoom = 1, sel = null, filter = null, lastFeedKey = "";
+const LANE = 46, TOP = 26, PAD = 12;
+let W = 800, X = (d) => d;
+
+// ---------------------------------------------------------------- header
+$("title").textContent = D.title || "Session " + D.session.slice(0, 8);
+$("meta").textContent = [D.session.slice(0, 8), fmtClock(D.started) + " → " + fmtClock(D.ended),
+  D.models.join(", "), D.redacted ? "redacted" : ""].filter(Boolean).join(" · ");
+const M = {};
+function metric(key, label) {
+  const v = h("div", { class: "v" }), t = h("div", { class: "t" });
+  $("metrics").append(h("div", { class: "metric" }, h("div", { class: "k" }, label), v, t));
+  M[key] = { v, t };
+}
+metric("cost", "Cost so far (API-equivalent)");
+metric("tok", "Tokens so far");
+metric("run", "Agents running now");
+metric("time", "Active time so far");
+metric("agents", "Agents");
+
+// ---------------------------------------------------------------- legend
+const leg = $("legend");
+function legItem(color, text, round) { leg.append(h("span", {}, h("span", { class: round ? "dot" : "sw", style: "background:" + color }), text)); }
+legItem("var(--call)", "model call (taller = more context)");
+legItem("var(--base)", "first call of a subagent (base context)");
+legItem("var(--tool)", "tool call");
+legItem("var(--spawn)", "started a subagent");
+legItem("var(--err)", "tool error");
+legItem("var(--you)", "your message", true);
+leg.append(h("span", {}, "▲ finding · arrows show reports coming back, coloured by whether they were used · grey bands are squeezed idle time"));
+leg.append(h("span", {}, h("kbd", {}, "space"), " play  ", h("kbd", {}, "←"), " ", h("kbd", {}, "→"), " step"));
+
+// ---------------------------------------------------------------- lanes
+const svg = $("svg"), area = $("area");
+const yOf = (i) => TOP + i * LANE + LANE / 2;
+function drawLabels() {
+  const box = $("labels");
+  box.replaceChildren(h("div", { style: "height:" + TOP + "px" }));
+  A.forEach((a, i) => {
+    const ln = a.lineage;
+    const m = h("div", { class: "m" }, fmtUsd(a.cost) + " · " + a.calls + " calls" + (a.missing ? " · no transcript" : "") + " ");
+    if (ln) m.append(h("span", { class: "badge " + statusClass(ln.status) }, ln.status));
+    const open = () => select({ type: "agent", i });
+    box.append(h("div", { class: "lab" + (sel && sel.type === "agent" && sel.i === i ? " sel" : ""),
+      style: "height:" + LANE + "px;padding-left:" + (10 + Math.min(a.depth, 4) * 14) + "px", tabindex: "0", title: a.label,
+      onclick: open, onkeydown: (e) => e.key === "Enter" && open() },
+      h("div", { class: "n" }, (a.depth ? "└ " : "") + a.label), m));
+  });
+}
+function draw() {
+  const avail = area.clientWidth || 800;
+  W = Math.max(avail, Math.round(avail * zoom));
+  const H = TOP + A.length * LANE + 8;
+  X = (d) => PAD + (d / TOTAL) * (W - 2 * PAD);
+  svg.setAttribute("width", W); svg.setAttribute("height", H); svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  svg.replaceChildren();
+  const bg = s("g", {}, svg), links = s("g", {}, svg), body = s("g", {}, svg), marks = s("g", {}, svg);
+
+  // squeezed idle time
+  for (const b of D.breaks) {
+    const w = Math.max(3, X(b.d + b.len) - X(b.d));
+    tip(s("rect", { x: X(b.d), y: TOP - 8, width: w, height: H - TOP + 8, fill: "var(--soft)" }, bg), "Idle " + fmtDur(b.real) + " (squeezed)");
+    if (w > 26) s("text", { x: X(b.d + b.len / 2), y: 13, "font-size": 10, fill: "var(--faint)", "text-anchor": "middle" }, bg).textContent = fmtDur(b.real);
+  }
+  // lane lines and lifetimes
+  A.forEach((a, i) => {
+    const y = yOf(i);
+    s("line", { x1: 0, x2: W, y1: y + LANE / 2, y2: y + LANE / 2, stroke: "var(--line)", "stroke-width": 1 }, bg);
+    if (a.start != null) {
+      const end = a.report ?? a.end ?? a.start;
+      s("rect", { x: X(a.start), y: y - 1.5, width: Math.max(2, X(end) - X(a.start)), height: 3, fill: "var(--line2)", rx: 1.5 }, bg);
+    }
+  });
+  // spawn and report lines
+  A.forEach((a, i) => {
+    if (i === 0 || a.parent == null) return;
+    const py = yOf(a.parent), cy = yOf(i);
+    const sd = spawnOf[i] ? spawnOf[i].s : a.start;
+    if (sd != null) s("path", { d: `M${X(sd)} ${py + 11} L${X(sd)} ${cy - 18}`, stroke: "var(--spawn)", "stroke-width": 1, "stroke-dasharray": "3 3", fill: "none" }, links);
+    if (a.report != null) {
+      const st = a.lineage ? a.lineage.status : "no trace found", rx = X(a.report);
+      tip(s("path", { d: `M${rx} ${cy - 6} L${rx} ${py + 12} M${rx - 4} ${py + 18} L${rx} ${py + 12} L${rx + 4} ${py + 18}`,
+        stroke: statusColor(st), "stroke-width": 1.6, fill: "none" }, links), "Report back to parent: " + st);
+    }
+  });
+  // model calls (above the line)
+  D.calls.forEach((c, i) => {
+    if (c.s == null) return;
+    const y = yOf(c.a), hgt = 5 + 13 * Math.sqrt(c.in / maxIn);
+    const isBase = c.a > 0 && firstCall[c.a] === i;
+    tip(s("rect", { x: X(c.s), y: y - 2 - hgt, width: Math.max(2, X(c.e) - X(c.s)), height: hgt, rx: 1,
+      fill: isBase ? "var(--base)" : "var(--call)", opacity: c.copied ? 0.35 : 1, "data-t": "call", "data-i": i, style: "cursor:pointer" }, body),
+      `Model call · ${fmtTok(c.in)} in · ${fmtTok(c.out)} out · ${fmtUsd(c.cost)}${isBase ? " · base context" : ""}${c.copied ? " · copied from an older session" : ""}`);
+  });
+  // tool calls (below the line)
+  D.tools.forEach((t, i) => {
+    if (t.s == null) return;
+    tip(s("rect", { x: X(t.s), y: yOf(t.a) + 3, width: Math.max(2, X(t.e) - X(t.s)), height: 7, rx: 1,
+      fill: t.error ? "var(--err)" : t.spawned != null ? "var(--spawn)" : "var(--tool)", "data-t": "tool", "data-i": i, style: "cursor:pointer" }, body),
+      `${t.name}${t.target ? " · " + short(oneLine(t.target), 200) : ""}${t.error ? " · error" : ""}`);
+  });
+  // your messages and compactions, above the lead lane
+  D.humans.forEach((d) => d != null && tip(s("circle", { cx: X(d), cy: TOP - 1, r: 4, fill: "var(--you)" }, marks), "Your message"));
+  D.compactions.forEach((d) => d != null && tip(s("rect", { x: X(d) - 3, y: TOP - 5, width: 6, height: 8, fill: "var(--faint)" }, marks), "Conversation compacted"));
+  // findings
+  D.findings.forEach((f, i) => {
+    if (f.d == null || (filter && f.kind !== filter)) return;
+    const fx = X(f.d), fy = yOf(f.a) + 19;
+    tip(s("path", { d: `M${fx} ${fy - 6} L${fx + 5} ${fy + 3} L${fx - 5} ${fy + 3} Z`, fill: `var(--f-${f.kind})`, "data-t": "finding", "data-i": i, style: "cursor:pointer" }, marks), f.title);
+  });
+  // selection highlight, and the link from a repeat back to the first time
+  if (sel) {
+    let el = null;
+    if (sel.type === "call" || sel.type === "tool" || sel.type === "finding") el = svg.querySelector(`[data-t="${sel.type}"][data-i="${sel.i}"]`);
+    if (sel.type === "finding") {
+      const f = D.findings[sel.i];
+      if (f.kind === "repeat" && f.tool != null && f.first_tool != null) {
+        const a = D.tools[f.first_tool], b = D.tools[f.tool];
+        s("path", { d: `M${X(a.s)} ${yOf(a.a) + 10} C${X(a.s)} ${yOf(a.a) + 34}, ${X(b.s)} ${yOf(b.a) + 34}, ${X(b.s)} ${yOf(b.a) + 10}`,
+          stroke: "var(--f-repeat)", "stroke-width": 1.5, fill: "none", "stroke-dasharray": "4 3" }, marks);
+      }
+    }
+    if (el) { el.setAttribute("stroke", "var(--fg)"); el.setAttribute("stroke-width", 1.5); }
+  }
+  // fade what hasn't happened yet, and the playhead
+  s("rect", { id: "fade", x: X(play), y: 0, width: Math.max(0, W - X(play)), height: H, fill: "var(--fade)", "pointer-events": "none" }, svg);
+  s("line", { id: "ph", x1: X(play), x2: X(play), y1: 0, y2: H, stroke: "var(--spawn)", "stroke-width": 1.5, "pointer-events": "none" }, svg);
+  $("zlabel").textContent = zoom === 1 ? "whole run" : (zoom < 10 ? zoom.toFixed(1) : Math.round(zoom)) + "×";
+}
+svg.addEventListener("click", (e) => {
+  const t = e.target.closest("[data-t]");
+  if (t) { select({ type: t.dataset.t, i: +t.dataset.i }); return; }
+  const r = svg.getBoundingClientRect();
+  setPlay((e.clientX - r.left - PAD) / (W - 2 * PAD) * TOTAL);
+});
+
+// ---------------------------------------------------------------- playhead
+function setPlay(d, keepScroll) {
+  play = Math.min(TOTAL, Math.max(0, d));
+  $("slider").value = play;
+  const fade = $("fade"), ph = $("ph");
+  if (fade) { fade.setAttribute("x", X(play)); fade.setAttribute("width", Math.max(0, W - X(play))); }
+  if (ph) { ph.setAttribute("x1", X(play)); ph.setAttribute("x2", X(play)); }
+  if (!keepScroll && zoom > 1) {
+    const px = X(play);
+    if (px < area.scrollLeft + 40 || px > area.scrollLeft + area.clientWidth - 40) area.scrollLeft = px - area.clientWidth / 2;
+  }
+  const k = bisectRight(callsByStart, play, (c) => c.s);
+  M.cost.v.textContent = fmtUsd(k ? cumCost[k - 1] : 0);
+  M.cost.t.textContent = "of " + fmtUsd(D.totals.cost) + (D.totals.cost_unknown ? ` (${D.totals.cost_unknown} calls unpriced)` : "");
+  M.tok.v.textContent = fmtTok(k ? cumTok[k - 1] : 0);
+  M.tok.t.textContent = "of " + fmtTok(D.totals.tokens) + " · " + k + " of " + callsByStart.length + " calls";
+  M.run.v.textContent = A.filter((a) => a.start != null && a.start <= play && play < (a.report ?? a.end ?? a.start)).length;
+  M.run.t.textContent = "at most " + D.totals.peak + " subagents at once";
+  M.time.v.textContent = fmtDur(activeAt(play));
+  M.time.t.textContent = "of " + fmtDur(D.active) + " active · " + fmtDur(D.wall) + " wall clock";
+  M.agents.v.textContent = A.length;
+  M.agents.t.textContent = (A.length - 1) + " subagents · " + D.totals.tools + " tool calls";
+  const br = inBreak(play);
+  $("clock").textContent = br ? "idle for " + fmtDur(br.real) : fmtClock(realAt(play));
+  renderFeed();
+}
+function feedText(f) {
+  if (f.type === "call") { const c = D.calls[f.i]; return `model call · ${fmtTok(c.in)} in · ${fmtTok(c.out)} out · ${fmtUsd(c.cost)}`; }
+  if (f.type === "tool") { const t = D.tools[f.i]; return t.spawned != null ? `started ${A[t.spawned].label}` : `${t.name}${t.target ? " · " + short(oneLine(t.target), 110) : ""}${t.error ? " · error" : ""}`; }
+  if (f.type === "said") return "“" + short(oneLine(D.said[f.i].text), 160) + "”";
+  if (f.type === "report") { const a = A[f.i]; return `report from ${a.label} · ${a.lineage ? a.lineage.status : "?"}`; }
+  if (f.type === "human") return "you sent a message";
+  return "conversation compacted";
+}
+function renderFeed() {
+  const k = bisectRight(feed, play, (f) => f.d);
+  if (String(k) === lastFeedKey) return;
+  lastFeedKey = String(k);
+  const box = $("feed");
+  box.replaceChildren();
+  const items = feed.slice(Math.max(0, k - 10), k).reverse();
+  if (!items.length) { box.append(h("div", {}, "Nothing has happened yet. Press Play or click the timeline.")); return; }
+  for (const f of items) {
+    const target = f.type === "call" || f.type === "tool" || f.type === "said" ? { type: f.type, i: f.i } : f.type === "report" ? { type: "agent", i: f.i } : null;
+    box.append(h("div", { onclick: () => target && select(target) }, h("span", { class: "w" }, fmtDur(activeAt(f.d))),
+      h("span", { class: "ag" }, short(A[f.a] ? A[f.a].label : "", 28)), feedText(f)));
+  }
+}
+
+// ---------------------------------------------------------------- details
+const row = (k, v) => h("tr", {}, h("td", {}, k), h("td", {}, v));
+function select(item, keepPlay) {
+  sel = item;
+  const box = $("detail");
+  box.replaceChildren();
+  let at = null;
+  if (item.type === "agent") {
+    const a = A[item.i], ln = a.lineage;
+    box.append(h("div", { style: "font-weight:500" }, a.label));
+    const t = h("table", {}, row("type", a.kind + (a.background ? " · background" : "")), row("model", a.model || "?"),
+      row("cost", fmtUsd(a.cost) + " API-equivalent"),
+      row("tokens", `fresh in ${fmtTok(a.tokens.in)} · cache write ${fmtTok(a.tokens.cache_write)} · cache read ${fmtTok(a.tokens.cache_read)} · out ${fmtTok(a.tokens.out)}`),
+      row("work", a.calls + " model calls · " + a.tools + " tool calls"));
+    if (a.base_context != null && item.i > 0) t.append(row("base context", fmtTok(a.base_context) + " tokens at its first call · " + Math.round(a.base_share * 100) + "% of its cost"));
+    if (ln) {
+      const v = h("span", {}, h("span", { class: "badge " + statusClass(ln.status) }, ln.status), " ");
+      if (ln.report !== "no report") v.append(`Report ${ln.report}: ${ln.reused} of ${ln.items} distinctive items reappeared, ${Math.round(ln.overlap * 100)}% of phrases. `);
+      if (ln.files_written) v.append(`Files: ${ln.files_written} written, ${ln.picked_up} picked up, ${ln.revised} revised, ${ln.replaced} replaced.`);
+      t.append(row("where its work went", v));
+    }
+    if (a.missing) t.append(row("note", "Its transcript file is missing; only what the parent saw is shown."));
+    box.append(t);
+    const end = a.report ?? a.end;
+    if (a.start != null && end != null && end > a.start) box.append(h("button", { style: "margin-bottom:8px", onclick: () => zoomTo(a.start, end) }, "Zoom to its time"));
+    if (a.instructions) box.append(h("h2", {}, "Instructions it got"), h("pre", {}, a.instructions));
+    if (a.report_text) box.append(h("h2", {}, "Its report"), h("pre", {}, a.report_text));
+    at = item.i === 0 ? null : (a.report ?? a.end ?? a.start);  // show its whole lane as already happened
+  } else if (item.type === "call") {
+    const c = D.calls[item.i];
+    box.append(h("div", { style: "font-weight:500" }, "Model call · " + A[c.a].label),
+      h("table", {}, row("when", fmtClock(c.real)), row("model", D.models[c.m]),
+        row("context in", `${fmtTok(c.in)} (fresh ${fmtTok(c.fresh)} · cache write ${fmtTok(c.cw)} · cache read ${fmtTok(c.cr)})`),
+        row("written", fmtTok(c.out) + " tokens"), row("cost", fmtUsd(c.cost) + " API-equivalent"),
+        c.copied ? row("note", "Copied history: the original of this call lives in an older session file.") : null));
+    at = c.s;
+  } else if (item.type === "tool") {
+    const t = D.tools[item.i];
+    const tb = h("table", {}, row("when", fmtClock(t.real)), row("took", fmtDur(t.e - t.s)),
+      row("result", (t.media ? "image or document" : t.chars.toLocaleString() + " characters") + (t.error ? " · error" : "")));
+    if (t.approval) tb.append(row("permission", (t.approval.by_you ? "decided by you: " : "decided by settings: ") + t.approval.decision));
+    if (t.spawned != null) tb.append(row("started", h("a", { href: "#", onclick: (e) => { e.preventDefault(); select({ type: "agent", i: t.spawned }); } }, A[t.spawned].label)));
+    box.append(h("div", { style: "font-weight:500" }, t.name + " · " + A[t.a].label), tb);
+    if (t.target) box.append(h("h2", {}, "Target"), h("pre", {}, t.target));
+    at = t.s;
+  } else if (item.type === "said") {
+    const m = D.said[item.i];
+    box.append(h("div", { style: "font-weight:500" }, A[m.a].label + " wrote"), h("div", { class: "sub" }, fmtClock(m.real)), h("pre", {}, m.text));
+    at = m.d;
+  } else if (item.type === "finding") {
+    const f = D.findings[item.i];
+    box.append(h("div", { style: "font-weight:500" }, f.title), h("div", { class: "sub" }, kindNames[f.kind] + " · " + A[f.a].label),
+      h("p", { style: "margin:6px 0" }, f.detail));
+    at = f.d;
+  }
+  drawLabels();
+  draw();
+  lastFeedKey = "";
+  if (!keepPlay && at != null) setPlay(at); else setPlay(play, true);
+}
+
+// ---------------------------------------------------------------- findings list
+function renderFindings() {
+  const counts = {};
+  D.findings.forEach((f) => counts[f.kind] = (counts[f.kind] || 0) + 1);
+  const pick = (k) => { filter = k; renderFindings(); draw(); setPlay(play, true); };
+  const chips = $("chips");
+  chips.replaceChildren(h("span", { class: "chip" + (filter ? "" : " on"), onclick: () => pick(null) }, "all " + D.findings.length));
+  for (const k of Object.keys(kindNames)) if (counts[k]) chips.append(h("span", { class: "chip" + (filter === k ? " on" : ""), onclick: () => pick(k) },
+    h("span", { class: "dot", style: `background:var(--f-${k})` }), kindNames[k] + " " + counts[k]));
+  const box = $("findings");
+  box.replaceChildren();
+  const list = D.findings.map((f, i) => [f, i]).filter(([f]) => !filter || f.kind === filter);
+  if (!list.length) box.append(h("div", { class: "sub" }, "No findings for this run."));
+  for (const [f, i] of list) {
+    box.append(h("div", { class: "item", onclick: () => select({ type: "finding", i }) },
+      h("span", { class: "dot", style: `background:var(--f-${f.kind})` }), h("span", { class: "w" }, f.d == null ? "?" : fmtDur(activeAt(f.d))),
+      f.title + " · ", h("span", { class: "sub" }, short(A[f.a].label, 40))));
+  }
+}
+
+// ---------------------------------------------------------------- replay controls
+const speeds = [10, 30, 60, 150, 300, 900];
+speed = speeds.reduce((best, v) => Math.abs(TOTAL / v - 60) < Math.abs(TOTAL / best - 60) ? v : best, speeds[0]);
+for (const v of speeds) $("speed").append(h("option", v === speed ? { value: v, selected: "" } : { value: v }, v + "× speed"));
+$("speed").onchange = (e) => speed = +e.target.value;
+$("slider").max = TOTAL;
+$("slider").oninput = (e) => { togglePlay(false); setPlay(+e.target.value); };
+let lastT = null;
+function frame(t) {
+  if (!playing) return;
+  if (lastT != null) {
+    let next = play + (t - lastT) / 1000 * speed;
+    const br = inBreak(next);
+    if (br) next = br.d + br.len;  // jump over squeezed idle time
+    setPlay(next);
+    if (play >= TOTAL) togglePlay(false);
+  }
+  lastT = t;
+  if (playing) requestAnimationFrame(frame);
+}
+function togglePlay(on) {
+  playing = on ?? !playing;
+  $("play").textContent = playing ? "Pause" : "Play";
+  if (playing) { if (play >= TOTAL) setPlay(0); lastT = null; requestAnimationFrame(frame); }
+}
+function step(dir) {
+  togglePlay(false);
+  if (dir > 0) { const i = bisectRight(stops, play + 1e-6, (v) => v); if (i < stops.length) setPlay(stops[i]); }
+  else { const i = bisectRight(stops, play - 1e-6, (v) => v) - 1; setPlay(i >= 0 ? stops[i] : 0); }
+}
+$("play").onclick = () => togglePlay();
+$("next").onclick = () => step(1);
+$("prev").onclick = () => step(-1);
+document.addEventListener("keydown", (e) => {
+  const el = e.target instanceof Element ? e.target : null;
+  if (el && el.matches("input, select, textarea")) return;
+  if (el && el.matches("button, [tabindex]") && (e.key === " " || e.key === "Enter")) return;  // let the focused control act
+  if (e.key === " ") { e.preventDefault(); togglePlay(); }
+  else if (e.key === "ArrowRight") { e.preventDefault(); step(1); }
+  else if (e.key === "ArrowLeft") { e.preventDefault(); step(-1); }
+  else if (e.key === "Home") setPlay(0);
+  else if (e.key === "End") setPlay(TOTAL);
+});
+function setZoom(z) { zoom = Math.min(256, Math.max(1, z)); draw(); setPlay(play); }
+function zoomTo(d0, d1) {
+  // fit [d0, d1] into about two thirds of the visible width
+  zoom = Math.min(256, Math.max(1, TOTAL / ((d1 - d0) * 1.5)));
+  draw();
+  area.scrollLeft = (X(d0) + X(d1)) / 2 - area.clientWidth / 2;
+  setPlay(play, true);
+}
+$("zin").onclick = () => setZoom(zoom * 2);
+$("zout").onclick = () => setZoom(zoom / 2);
+$("zfit").onclick = () => setZoom(1);
+let resizeTimer = null;
+window.addEventListener("resize", () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(() => { draw(); setPlay(play, true); }, 120); });
+
+// ---------------------------------------------------------------- notes
+const notes = [
+  `Idle gaps longer than ${Math.round(D.gap / 60)} minutes are squeezed into grey bands; the clock and "active time" skip them.`,
+  "Costs are API-equivalent: what these tokens would cost at list prices, not what a subscription charges.",
+];
+if (D.totals.copied) notes.push(`${D.totals.copied} model calls are history copied from an older session (a fork or resume). They are shown faded and also count toward that older session.`);
+notes.push("Tool results are not stored, only their size. Subagent lineage comes from text matching: \"used\" held up against a model check; \"unclear\" is a weak match.");
+if (D.redacted) notes.push("This page is redacted: every piece of transcript text was replaced by its length.");
+notes.push("Made by flightrec from Claude Code transcripts on this machine. Claude Code versions: " + (D.versions.join(", ") || "?") + ".");
+$("notes").replaceChildren(...notes.map((n) => h("div", {}, n)));
+
+// ---------------------------------------------------------------- go
+drawLabels();
+renderFindings();
+select({ type: "agent", i: 0 }, true);
+setPlay(TOTAL, true);
+</script>
+</body>
+</html>

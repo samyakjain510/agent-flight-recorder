@@ -229,6 +229,28 @@ class ReaderTests(unittest.TestCase):
         self.assertEqual(len(run.human_messages), 1)  # the report is not counted as a message from a person
 
 
+    def test_background_report_as_task_notification(self):
+        # Claude Code 2.1.330: the report arrives as a task-notification whose text carries the id and result.
+        path = multi_agent_session(self.fake)
+        with open(path) as f:
+            lines = [json.loads(x) for x in f if x.strip().startswith("{") and "not json" not in x]
+        lines = [x for x in lines if x.get("type") != "attachment"]
+        note = ("<task-notification>\n<task-id>a1</task-id>\n<status>completed</status>\n"
+                "<summary>Agent finished</summary>\n<result>found X via notification</result>\n"
+                "<usage><tool_uses>1</tool_uses></usage>\n</task-notification>")
+        shell = "<task-notification>\n<task-id>bash123</task-id>\n<status>completed</status>\n</task-notification>"
+        lines.append({"type": "user", "timestamp": ts(7), "origin": {"kind": "task-notification", "producer": "session-task"},
+                      "message": {"role": "user", "content": shell}})
+        lines.append({"type": "user", "timestamp": ts(8), "origin": {"kind": "task-notification", "producer": "session-task"},
+                      "message": {"role": "user", "content": note}})
+        with open(path, "w") as f:
+            f.write("\n".join(json.dumps(x) for x in lines) + "\n")
+        run = parse_session(path)
+        self.assertEqual(run.agents["a1"].report_text, "found X via notification")
+        self.assertEqual(run.agents["a1"].report_at, parse_ts(ts(8)))
+        self.assertEqual(len(run.human_messages), 1)
+
+
 class CheckTests(unittest.TestCase):
     def setUp(self):
         self.fake = FakeRoot()

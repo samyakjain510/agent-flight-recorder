@@ -112,7 +112,10 @@ def check_run(run: Run, now: Optional[float] = None) -> SessionCheck:
     theirs = reported_by_model(run)
     models = [ModelCheck(m, ours.get(m), theirs.get(m)) for m in sorted(set(ours) | set(theirs))]
     shared = sum(1 for r in run.requests() if r.shared_with)
-    live = (now - os.path.getmtime(run.path)) < LIVE_SECONDS if os.path.exists(run.path) else False
+    # "Still running": judged from the last timestamp inside the transcript, so a copied
+    # transcript (an example, a backup) isn't mistaken for a live one by its file time.
+    last = run.ended.timestamp() if run.ended else (os.path.getmtime(run.path) if os.path.exists(run.path) else 0)
+    live = (now - last) < LIVE_SECONDS
     result = SessionCheck(run=run, models=models, shared_calls=shared, compactions=len(run.compactions), live=live)
     if shared:
         others = {s for r in run.requests() for s in r.shared_with}
