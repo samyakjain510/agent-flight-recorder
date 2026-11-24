@@ -7,19 +7,20 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    # Official Python images, so 3.9 (what macOS ships as python3) stays testable
+    # after hosted runners drop it.
+    container: python:${{ matrix.python-version }}-slim
     strategy:
+      fail-fast: false
       matrix:
         python-version: ["3.9", "3.11", "3.13"]
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: ${{ matrix.python-version }}
       - name: Unit tests
         run: python -m unittest discover -s tests -v
       - name: Install and run on the demo transcripts
         run: |
-          python -m pip install .
+          python -m pip install --quiet .
           flightrec --version
           flightrec --root examples/demo-run/projects list
           flightrec --root examples/demo-run/projects analyze --all
