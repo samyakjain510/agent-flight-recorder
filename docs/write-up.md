@@ -56,15 +56,6 @@ No two agents wrote the same file. My helpers were researchers, so this tells me
 
 In the multi-agent sessions, settings made all 1,766 permission decisions. Across all 113 sessions I made 4 of 5,176 myself, 2 of them rejections, and answered 16 questions an agent asked me. I steered through conversation: 159 messages during multi-agent runs. In practice my permission settings decided what the agents could run.
 
-## What it changed in how I run agents
-
-> Draft for Samyak to rewrite or cut. Keep only what you actually do.
-
-- Give parallel helpers briefs that don't overlap, and say what each one should leave to the others (finding 5).
-- Hand reading-heavy work to a subagent once the lead's session is long, and keep small jobs in the lead while the session is young (findings 2 and 3).
-- Use a cheaper model for helpers when the job allows (finding 3).
-- Review permission settings as carefully as I would review a prompt, since they make nearly every decision (finding 8).
-
 ## What the tool can't see
 
 In the 43 sessions I could check, 10% of tokens were in model calls Claude Code counted but never wrote down. Each looks like about 500 new input tokens plus the cached conversation, with about 20 tokens out. I tested five guesses about what they are, and none fit.
